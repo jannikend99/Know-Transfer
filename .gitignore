@@ -6,6 +6,8 @@ __pycache__
 uploads
 vector_store
 knowledge_transfer.db
+.DS_Store
+
 
 
 
