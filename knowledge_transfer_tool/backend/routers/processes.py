@@ -1,0 +1,422 @@
+from fastapi import APIRouter, Depends, HTTPException, File, UploadFile, Response
+from sqlalchemy.orm import Session
+from typing import List, Dict, Any
+from uuid import UUID
+import os
+import shutil
+from io import BytesIO
+from reportlab.lib.pagesizes import letter, A4
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import inch
+from reportlab.lib import colors
+
+from langchain_core.messages import AIMessage, HumanMessage
+
+from .. import models, schemas
+from ..database import get_db, UPLOAD_DIRECTORY
+from ..services.openai_service import transcribe_audio_with_whisper
+from ..services.langchain_service import (
+    run_basic_chat_chain, 
+    extract_process_from_text,
+    add_text_to_vector_store, # Added
+    query_document_store,      # Added
+    generate_simple_html_visualization
+)
+from ..services.document_service import extract_text_from_file, SUPPORTED_MIME_TYPES
+
+router = APIRouter()
+
+@router.post("/processes", response_model=schemas.Process)
+def create_process(process: schemas.ProcessCreate, db: Session = Depends(get_db)):
+    db_process = models.Process(**process.dict())
+    db.add(db_process)
+    db.commit()
+    db.refresh(db_process)
+    return db_process
+
+@router.get("/processes", response_model=List[schemas.Process])
+def read_processes(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+    processes = db.query(models.Process).offset(skip).limit(limit).all()
+    return processes
+
+@router.get("/processes/{process_id}", response_model=schemas.Process)
+def read_process(process_id: UUID, db: Session = Depends(get_db)):
+    db_process = db.query(models.Process).filter(models.Process.id == process_id).first()
+    if db_process is None:
+        raise HTTPException(status_code=404, detail="Process not found")
+    return db_process
+
+@router.put("/processes/{process_id}", response_model=schemas.Process)
+def update_process(process_id: UUID, process: schemas.ProcessUpdate, db: Session = Depends(get_db)):
+    db_process = db.query(models.Process).filter(models.Process.id == process_id).first()
+    if db_process is None:
+        raise HTTPException(status_code=404, detail="Process not found")
+    
+    update_data = process.dict(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(db_process, key, value)
+    
+    db.add(db_process)
+    db.commit()
+    db.refresh(db_process)
+    return db_process
+
+@router.delete("/processes/{process_id}", response_model=schemas.Process)
+def delete_process(process_id: UUID, db: Session = Depends(get_db)):
+    db_process = db.query(models.Process).filter(models.Process.id == process_id).first()
+    if db_process is None:
+        raise HTTPException(status_code=404, detail="Process not found")
+    
+    # Delete related chat messages first
+    db.query(models.ChatMessage).filter(models.ChatMessage.process_id == process_id).delete()
+    
+    # Delete related documents if any
+    db.query(models.Document).filter(models.Document.process_id == process_id).delete()
+    
+    # Now delete the process
+    db.delete(db_process)
+    db.commit()
+    return db_process
+
+@router.post("/processes/{process_id}/upload-file", response_model=schemas.FileUploadResponse)
+async def upload_file_for_process(process_id: UUID, file: UploadFile = File(...), db: Session = Depends(get_db)):
+    db_process = db.query(models.Process).filter(models.Process.id == process_id).first()
+    if db_process is None:
+        raise HTTPException(status_code=404, detail="Process not found")
+
+    file_location = os.path.join(UPLOAD_DIRECTORY, file.filename)
+    transcript_text = None
+    extracted_doc_text = None
+    structured_data_from_doc_model = None
+    added_to_vector_store = False
+
+    try:
+        with open(file_location, "wb+") as file_object:
+            shutil.copyfileobj(file.file, file_object)
+        
+        # Log file upload as a system message
+        db_upload_msg = models.ChatMessage(
+            process_id=process_id,
+            sender_type="system", # Or 'user' if preferred to show who uploaded
+            content=f"File uploaded: {file.filename} ({file.content_type})"
+        )
+        db.add(db_upload_msg)
+        # db.commit() # Commit immediately or batch later
+
+        text_content_for_vector_store = None
+
+        if file.content_type and file.content_type.startswith("audio/"):
+            transcript_text = await transcribe_audio_with_whisper(file_location)
+            if transcript_text and not transcript_text.startswith("Error"):
+                text_content_for_vector_store = transcript_text
+                db_transcript_msg = models.ChatMessage(
+                    process_id=process_id,
+                    sender_type="ai", # AI generated the transcript
+                    content=f"Audio transcribed (first 100 chars): {transcript_text[:100]}..."
+                )
+                db.add(db_transcript_msg)
+            elif transcript_text: # Error in transcription
+                db_transcript_err_msg = models.ChatMessage(
+                    process_id=process_id,
+                    sender_type="system",
+                    content=f"Audio transcription failed for {file.filename}: {transcript_text}"
+                )
+                db.add(db_transcript_err_msg)
+
+        elif file.content_type in SUPPORTED_MIME_TYPES:
+            extracted_doc_text = extract_text_from_file(file_location, file.content_type)
+            if extracted_doc_text and not extracted_doc_text.startswith("Error"):
+                text_content_for_vector_store = extracted_doc_text
+                snippet_for_chat = extracted_doc_text[:200] + ("..." if len(extracted_doc_text) > 200 else "")
+                db_doc_extract_msg = models.ChatMessage(
+                    process_id=process_id,
+                    sender_type="ai", # AI extracted the text
+                    content=f"Text extracted from {file.filename} (first 200 chars): {snippet_for_chat}"
+                )
+                db.add(db_doc_extract_msg)
+
+                structured_data_from_doc_model = await extract_process_from_text(extracted_doc_text)
+                if structured_data_from_doc_model:
+                    for key, value in structured_data_from_doc_model.model_dump(exclude_none=True).items():
+                        if hasattr(db_process, key):
+                            if isinstance(value, list) and isinstance(getattr(db_process, key), list):
+                                current_list = getattr(db_process, key)
+                                new_items = [item for item in value if item not in current_list]
+                                if new_items:
+                                   setattr(db_process, key, current_list + new_items)
+                            elif value is not None: 
+                                setattr(db_process, key, value)
+                    db.commit()
+                    db.refresh(db_process)
+        
+        # One commit for all messages added in this try block so far
+        db.commit()
+
+        if text_content_for_vector_store:
+            print(f"Adding text from {file.filename} to vector store for process {process_id}")
+            added_to_vector_store = await add_text_to_vector_store(text_content_for_vector_store, str(process_id), file.filename)
+
+    except Exception as e:
+        print(f"Exception in upload_file_for_process: {type(e).__name__}: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Could not save or process file. Error: {str(e)}")
+    finally:
+        await file.close()
+    
+    return schemas.FileUploadResponse(
+        filename=file.filename, 
+        location=file_location, 
+        content_type=file.content_type,
+        message="File uploaded and processed",
+        transcript=transcript_text,
+        extracted_text_snippet=extracted_doc_text[:500] + ("..." if extracted_doc_text and len(extracted_doc_text) > 500 else "") if extracted_doc_text else None,
+        extracted_process_data=structured_data_from_doc_model,
+        vector_store_status="Content added to vector store" if added_to_vector_store else "Failed or not applicable"
+    )
+
+@router.post("/processes/{process_id}/chat", response_model=schemas.ChatResponse)
+async def process_chat(process_id: UUID, message_payload: Dict[str, str], db: Session = Depends(get_db)):
+    db_process = db.query(models.Process).filter(models.Process.id == process_id).first()
+    if db_process is None:
+        raise HTTPException(status_code=404, detail="Process not found")
+    
+    user_message = message_payload.get("text", "")
+    if not user_message:
+        raise HTTPException(status_code=400, detail="Message text cannot be empty")
+
+    # 1. Fetch recent chat history (e.g., last 10 messages)
+    db_chat_history = (
+        db.query(models.ChatMessage)
+        .filter(models.ChatMessage.process_id == process_id)
+        .order_by(models.ChatMessage.created_at.desc()) # Get newest first
+        .limit(10) # Limit the number of messages for context window
+        .all()
+    )
+    db_chat_history.reverse() # Reverse to get chronological order (oldest to newest)
+
+    # 2. Format history for LangChain
+    langchain_history: List[Any] = [] # Using Any to represent BaseMessage types
+    for msg in db_chat_history:
+        if msg.sender_type == 'user':
+            langchain_history.append(HumanMessage(content=msg.content))
+        elif msg.sender_type == 'ai':
+            langchain_history.append(AIMessage(content=msg.content))
+        # We can ignore 'system' messages for the direct chat history for now, or handle as needed.
+
+    # Save user message to DB (BEFORE calling AI, so it's part of history if AI were to see current turn)
+    db_user_chat_message = models.ChatMessage(
+        process_id=process_id,
+        sender_type="user",
+        content=user_message
+    )
+    db.add(db_user_chat_message)
+    # Commit user message now, so if AI call fails, user message is still saved.
+    db.commit()
+    db.refresh(db_user_chat_message)
+
+    # Append current user message to langchain_history for the current call
+    # This is what the AI will see as the latest human input within the history context.
+    langchain_history.append(HumanMessage(content=user_message))
+
+    # 3. Call LangChain service with history and process_id for RAG
+    ai_chat_response_text = await run_basic_chat_chain(
+        input_text=user_message, 
+        process_id=str(process_id), # Ensure process_id is a string if langchain_service expects it that way
+        chat_history=langchain_history
+    )
+    extracted_data_model = await extract_process_from_text(user_message) # Stays based on current message for now
+    
+    # Save AI response to DB
+    db_ai_chat_message = models.ChatMessage(
+        process_id=process_id,
+        sender_type="ai",
+        content=ai_chat_response_text
+        # Potentially add metadata if extracted_data_model is not None
+    )
+    db.add(db_ai_chat_message)
+    
+    db.commit() # Commit both messages
+    db.refresh(db_ai_chat_message)   # Optional
+
+    if extracted_data_model:
+        print(f"Extracted structured data from chat: {extracted_data_model.model_dump(exclude_none=True)}")
+        # Update the main Process object in the database with the extracted data
+        for key, value in extracted_data_model.model_dump(exclude_none=True).items():
+            if hasattr(db_process, key):
+                current_db_value = getattr(db_process, key)
+                # Special handling for list fields: append new unique items
+                if isinstance(value, list) and isinstance(current_db_value, list):
+                    new_items = [item for item in value if item not in current_db_value]
+                    if new_items:
+                        setattr(db_process, key, current_db_value + new_items)
+                # For non-list fields, or if db field is not a list, overwrite if new value is provided
+                elif value is not None: 
+                    setattr(db_process, key, value)
+        db.add(db_process) # Add db_process again to mark it as dirty for commit
+        db.commit()        # Commit changes to the db_process
+        db.refresh(db_process) # Refresh to get updated data if needed elsewhere
+
+    return schemas.ChatResponse(
+        user_message=user_message, 
+        ai_chat_response=ai_chat_response_text,
+        extracted_process_data=extracted_data_model
+    )
+
+@router.post("/processes/{process_id}/query-documents", response_model=schemas.DocumentQueryResponse)
+async def query_process_documents(process_id: UUID, query_payload: Dict[str, str], db: Session = Depends(get_db)):
+    user_query = query_payload.get("text", "")
+    if not user_query:
+        raise HTTPException(status_code=400, detail="Query text cannot be empty")
+
+    ai_response_text = await query_document_store(user_query, str(process_id))
+    
+    return schemas.DocumentQueryResponse(
+        user_query=user_query, 
+        ai_response=ai_response_text
+    )
+
+@router.get("/processes/{process_id}/chat-history", response_model=List[schemas.ChatMessageResponse])
+def get_chat_history(process_id: UUID, db: Session = Depends(get_db)):
+    db_process = db.query(models.Process).filter(models.Process.id == process_id).first()
+    if db_process is None:
+        raise HTTPException(status_code=404, detail="Process not found")
+    
+    # Query chat messages associated with this process, ordered by creation time
+    chat_history = (
+        db.query(models.ChatMessage)
+        .filter(models.ChatMessage.process_id == process_id)
+        .order_by(models.ChatMessage.created_at.asc())
+        .all()
+    )
+    
+    return chat_history
+
+@router.get("/processes/{process_id}/visualize", response_class=Response)
+async def get_process_visualization(process_id: UUID, db: Session = Depends(get_db)):
+    db_process = db.query(models.Process).filter(models.Process.id == process_id).first()
+    if db_process is None:
+        raise HTTPException(status_code=404, detail="Process not found")
+
+    try:
+        process_schema = schemas.Process.model_validate(db_process)
+        process_data_text = str(process_schema.model_dump(exclude_none=True))
+    except Exception as e:
+        print(f"Error converting process to schema for visualization: {type(e).__name__} - {e}")
+        fallback_desc = db_process.general_description[:50] + "..." if db_process.general_description else "N/A"
+        process_data_text = f"Could not load full details for process {process_id}. ID={db_process.id}, Description snippet='{fallback_desc}'"
+
+    html_content = await generate_simple_html_visualization(process_data_text)
+    
+    return Response(content=html_content, media_type="text/html")
+
+@router.get("/processes/{process_id}/export-pdf")
+async def export_process_to_pdf(process_id: UUID, db: Session = Depends(get_db)):
+    """Export process details to PDF format"""
+    db_process = db.query(models.Process).filter(models.Process.id == process_id).first()
+    if db_process is None:
+        raise HTTPException(status_code=404, detail="Process not found")
+
+    try:
+        # Create a buffer for the PDF
+        buffer = BytesIO()
+        
+        # Create the PDF document
+        doc = SimpleDocTemplate(buffer, pagesize=A4, 
+                              topMargin=72, bottomMargin=72,
+                              leftMargin=72, rightMargin=72)
+        
+        # Get styles
+        styles = getSampleStyleSheet()
+        title_style = ParagraphStyle('CustomTitle', parent=styles['Heading1'],
+                                   fontSize=24, spaceAfter=30, 
+                                   textColor=colors.HexColor('#1f2937'))
+        heading_style = ParagraphStyle('CustomHeading', parent=styles['Heading2'],
+                                     fontSize=16, spaceAfter=12, spaceBefore=20,
+                                     textColor=colors.HexColor('#374151'))
+        normal_style = styles['Normal']
+        
+        # Content container
+        content = []
+        
+        # Title
+        title = db_process.title or "Untitled Process"
+        content.append(Paragraph(title, title_style))
+        content.append(Spacer(1, 20))
+        
+        # Overview
+        if db_process.general_description:
+            content.append(Paragraph("Overview", heading_style))
+            content.append(Paragraph(db_process.general_description, normal_style))
+            content.append(Spacer(1, 15))
+        
+        # Scope
+        if db_process.scope:
+            content.append(Paragraph("Scope", heading_style))
+            content.append(Paragraph(db_process.scope, normal_style))
+            content.append(Spacer(1, 15))
+        
+        # Process Steps
+        if db_process.process_steps and len(db_process.process_steps) > 0:
+            content.append(Paragraph("Process Steps", heading_style))
+            for i, step in enumerate(db_process.process_steps, 1):
+                content.append(Paragraph(f"{i}. {step}", normal_style))
+            content.append(Spacer(1, 15))
+        
+        # Inputs
+        if db_process.inputs and len(db_process.inputs) > 0:
+            content.append(Paragraph("Inputs", heading_style))
+            for inp in db_process.inputs:
+                content.append(Paragraph(f"• {inp}", normal_style))
+            content.append(Spacer(1, 15))
+        
+        # Outputs
+        if db_process.outputs and len(db_process.outputs) > 0:
+            content.append(Paragraph("Outputs", heading_style))
+            for output in db_process.outputs:
+                content.append(Paragraph(f"• {output}", normal_style))
+            content.append(Spacer(1, 15))
+        
+        # KPIs
+        if db_process.kpis and len(db_process.kpis) > 0:
+            content.append(Paragraph("Key Performance Indicators", heading_style))
+            for kpi in db_process.kpis:
+                content.append(Paragraph(f"• {kpi}", normal_style))
+            content.append(Spacer(1, 15))
+        
+        # Roles & Responsibilities
+        if db_process.roles_responsibilities and len(db_process.roles_responsibilities) > 0:
+            content.append(Paragraph("Roles & Responsibilities", heading_style))
+            for role in db_process.roles_responsibilities:
+                content.append(Paragraph(f"• {role}", normal_style))
+            content.append(Spacer(1, 15))
+        
+        # Exceptions & Special Cases
+        if db_process.exceptions_special_cases and len(db_process.exceptions_special_cases) > 0:
+            content.append(Paragraph("Exceptions & Special Cases", heading_style))
+            for exception in db_process.exceptions_special_cases:
+                content.append(Paragraph(f"• {exception}", normal_style))
+            content.append(Spacer(1, 15))
+        
+        # Build the PDF
+        doc.build(content)
+        
+        # Get the PDF content
+        buffer.seek(0)
+        pdf_data = buffer.getvalue()
+        buffer.close()
+        
+        # Return the PDF as a response
+        filename = f"{title.replace(' ', '_')}.pdf"
+        return Response(
+            content=pdf_data,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f"attachment; filename={filename}"}
+        )
+        
+    except Exception as e:
+        print(f"Error generating PDF: {type(e).__name__} - {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Could not generate PDF: {str(e)}")
