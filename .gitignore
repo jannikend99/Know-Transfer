@@ -1,3 +1,11 @@
 /.env
 /.venv
 /todo.txt
+node_modules
+__pycache__
+uploads
+vector_store
+knowledge_transfer.db
+
+
+
