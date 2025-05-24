@@ -23,116 +23,188 @@ const ChatInterface = ({ processId: propProcessId, processData, onProcessDataUpd
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState('');
 
-  // Fetch initial chat history
+  // Helper function to fetch and update chat history
+  const fetchChatHistory = async () => {
+    if (!processId) return;
+    
+    try {
+      const response = await fetch(`/api/processes/${processId}/chat-history`);
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({ detail: 'Failed to fetch chat history, server error.'}));
+        throw new Error(errData.detail || `HTTP error! status: ${response.status}`);
+      }
+      const history = await response.json();
+      
+      // Transform backend history to frontend message format
+      const formattedHistory = history.map(msg => ({
+        id: msg.id, // Use the UUID from backend
+        text: msg.content,
+        type: msg.sender_type, // 'user', 'ai', 'system'
+        timestamp: new Date(msg.created_at) // Ensure it's a Date object
+      }));
+      
+      setMessages(formattedHistory);
+      return formattedHistory;
+    } catch (err) {
+      console.error("Error fetching chat history:", err);
+      setError(`Could not load chat history: ${err.message}`);
+      setMessages([{ id: `err-hist-${Date.now()}`, text: `Error: Could not load chat history. ${err.message}`, type: 'error', timestamp: new Date()}]);
+      return [];
+    }
+  };
+
+  // Initialize chat history and welcome message
   useEffect(() => {
     if (processId) {
       console.log(`ChatInterface mounted for processId: ${processId}. Fetching chat history.`);
-      const fetchHistory = async () => {
+      const initializeChat = async () => {
         setIsLoading(true);
         setError(null);
-        try {
-          const response = await fetch(`/api/processes/${processId}/chat-history`);
-          if (!response.ok) {
-            const errData = await response.json().catch(() => ({ detail: 'Failed to fetch chat history, server error.'}));
-            throw new Error(errData.detail || `HTTP error! status: ${response.status}`);
+        
+        const history = await fetchChatHistory();
+        
+        // If no chat history exists, send a welcome message to backend
+        if (history.length === 0) {
+          try {
+            const welcomeResponse = await fetch(`/api/processes/${processId}/chat`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ text: "SYSTEM_WELCOME_MESSAGE" })
+            });
+            
+            if (welcomeResponse.ok) {
+              // Refresh chat history to get the saved welcome message
+              await fetchChatHistory();
+            } else {
+              console.error("Failed to create welcome message");
+            }
+          } catch (err) {
+            console.error("Error creating welcome message:", err);
           }
-          const history = await response.json();
-          // Transform backend history to frontend message format
-          const formattedHistory = history.map(msg => ({
-            id: msg.id, // Use the UUID from backend
-            text: msg.content,
-            type: msg.sender_type, // 'user', 'ai', 'system'
-            timestamp: new Date(msg.created_at) // Ensure it's a Date object
-          }));
-          setMessages(formattedHistory);
-        } catch (err) {
-          console.error("Error fetching chat history:", err);
-          setError(`Could not load chat history: ${err.message}`);
-          setMessages([{ id: `err-hist-${Date.now()}`, text: `Error: Could not load chat history. ${err.message}`, type: 'error', timestamp: new Date()}]);
-        } finally {
-          setIsLoading(false);
         }
+        
+        setIsLoading(false);
       };
-      fetchHistory();
+      
+      initializeChat();
     }
   }, [processId]);
 
   const handleSendMessage = async (messageData) => {
     if (!processId) {
       setError("Process ID is not available. Cannot send message.");
-      setMessages(prev => [...prev, { id: `err-${Date.now()}`, text: "Error: Process ID missing.", type: 'error'}]);
       return;
     }
+    
     setIsSending(true);
     setError(null);
 
-    const userMessage = {
-      id: `user-${Date.now()}`,
-      text: messageData.type === 'text' ? messageData.content : `Uploaded ${messageData.type}: ${messageData.name || 'audio file'}`,
-      type: 'user',
-      timestamp: new Date()
-    };
-    setMessages(prev => [...prev, userMessage]);
-
-    let aiResponseMessage = { id: `ai-${Date.now()}`, type: 'ai', timestamp: new Date() };
+    // Show user message immediately for both text and file uploads (optimistic UI)
+    let optimisticUserMessage = null;
+    if (messageData.type === 'text') {
+      optimisticUserMessage = {
+        id: `user-optimistic-${Date.now()}`,
+        text: messageData.content,
+        type: 'user',
+        timestamp: new Date()
+      };
+      setMessages(prev => [...prev, optimisticUserMessage]);
+    } else if (messageData.type === 'voice' || messageData.type === 'document') {
+      optimisticUserMessage = {
+        id: `user-optimistic-${Date.now()}`,
+        text: `Uploaded: ${messageData.name}`,
+        type: 'user',
+        timestamp: new Date()
+      };
+      setMessages(prev => [...prev, optimisticUserMessage]);
+    }
 
     try {
       let response;
       let responseBody;
 
       if (messageData.type === 'text') {
+        // Send text message to backend
         response = await fetch(`/api/processes/${processId}/chat`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ text: messageData.content })
         });
+        
         if (!response.ok) {
-            const errData = await response.json().catch(() => ({ detail: "Unknown error during chat." }));
-            throw new Error(errData.detail || `Chat API error! Status: ${response.status}`);
+          const errData = await response.json().catch(() => ({ detail: "Unknown error during chat." }));
+          throw new Error(errData.detail || `Chat API error! Status: ${response.status}`);
         }
+        
         responseBody = await response.json();
-        aiResponseMessage.text = responseBody.ai_chat_response || "No direct chat response.";
-        // If structured data was extracted, mention it or use it.
-        if (responseBody.extracted_process_data) {
-          aiResponseMessage.text += `\n(AI also extracted some process data from your message.)`;
-          // Trigger update in parent if data was extracted and potentially saved/updated by backend
-          if (onProcessDataUpdate) {
-             // Assuming backend might have updated the process, parent should re-fetch or merge
-             onProcessDataUpdate(); 
-          }
+        
+        // Add AI response immediately without refreshing entire history
+        const aiMessage = {
+          id: `ai-${Date.now()}`,
+          text: responseBody.ai_chat_response || "No response from AI.",
+          type: 'ai',
+          timestamp: new Date()
+        };
+        setMessages(prev => [...prev, aiMessage]);
+        
+        // If structured data was extracted, trigger parent update
+        if (responseBody.extracted_process_data && onProcessDataUpdate) {
+          onProcessDataUpdate();
         }
+        
       } else if (messageData.type === 'voice' || messageData.type === 'document') {
+        // Send file to backend (processing happens in background)
         const formData = new FormData();
-        formData.append('file', messageData.content, messageData.name); // content is Blob or File
+        formData.append('file', messageData.content, messageData.name);
 
         response = await fetch(`/api/processes/${processId}/upload-file`, {
           method: 'POST',
           body: formData 
         });
+        
         if (!response.ok) {
-            const errData = await response.json().catch(() => ({ detail: "Unknown error during file upload." }));
-            throw new Error(errData.detail || `File upload API error! Status: ${response.status}`);
+          const errData = await response.json().catch(() => ({ detail: "Unknown error during file upload." }));
+          throw new Error(errData.detail || `File upload API error! Status: ${response.status}`);
         }
+        
         responseBody = await response.json();
-        aiResponseMessage.text = `File processed: ${responseBody.filename}.`;
-        if(responseBody.transcript) aiResponseMessage.text += `\nTranscript: ${responseBody.transcript.substring(0,100)}...`;
-        if(responseBody.extracted_text_snippet) aiResponseMessage.text += `\nExtracted Text: ${responseBody.extracted_text_snippet}`; 
-        if(responseBody.extracted_process_data) aiResponseMessage.text += `\n(AI also extracted process data from the file.)`;
-        if(responseBody.vector_store_status) aiResponseMessage.text += `\n(${responseBody.vector_store_status})`;
+        
+        // Add AI response when processing is complete
+        if (responseBody.ai_response) {
+          const aiMessage = {
+            id: `ai-${Date.now()}`,
+            text: responseBody.ai_response,
+            type: 'ai',
+            timestamp: new Date()
+          };
+          setMessages(prev => [...prev, aiMessage]);
+        }
         
         // If file upload led to process data changes, trigger parent update
         if (responseBody.extracted_process_data && onProcessDataUpdate) {
-            onProcessDataUpdate();
+          onProcessDataUpdate();
         }
       } else {
         throw new Error('Unknown message type');
       }
-      setMessages(prev => [...prev, aiResponseMessage]);
 
     } catch (err) {
       console.error("Error in handleSendMessage:", err);
       setError(err.message);
-      setMessages(prev => [...prev, { ...aiResponseMessage, text: `Error: ${err.message || 'Could not get AI response.'}`, type: 'error'}]);
+      
+      // Remove optimistic user message if there was an error
+      if (optimisticUserMessage) {
+        setMessages(prev => prev.filter(msg => msg.id !== optimisticUserMessage.id));
+      }
+      
+      // Add error message locally if backend communication failed
+      const errorMessage = {
+        id: `error-${Date.now()}`,
+        text: `Error: ${err.message || 'Could not process message.'}`,
+        type: 'error',
+        timestamp: new Date()
+      };
+      setMessages(prev => [...prev, errorMessage]);
     } finally {
       setIsSending(false);
     }

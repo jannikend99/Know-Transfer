@@ -29,17 +29,18 @@ const DocumentUpload = ({ onSendDocument, disabled }) => {
     if (file) {
       setIsUploading(true);
       console.log(`Processing upload of ${file.name}...`);
-      // Small delay to show loading state, then send
-      setTimeout(() => {
-        if (onSendDocument) {
-          onSendDocument({ type: 'document', content: file, name: file.name });
-        } else {
-          alert(`Document "${file.name}" ready for processing (simulated).`);
-        }
-        setSelectedFile(null);
-        setIsUploading(false);
-        if(fileInputRef.current) fileInputRef.current.value = null;
-      }, 500);
+      
+      // Send the document immediately
+      if (onSendDocument) {
+        onSendDocument({ type: 'document', content: file, name: file.name });
+      } else {
+        alert(`Document "${file.name}" ready for processing (simulated).`);
+      }
+      
+      // Reset state after sending
+      setSelectedFile(null);
+      setIsUploading(false);
+      if(fileInputRef.current) fileInputRef.current.value = null;
     }
   };
 

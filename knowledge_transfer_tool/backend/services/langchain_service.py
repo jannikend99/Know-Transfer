@@ -218,8 +218,8 @@ async def add_text_to_vector_store(text_content: str, process_id: str, document_
         print(f"[VS ADD DEBUG] Attempting to add {len(texts)} chunks to vector store for process {process_id} (doc: {document_id})")
         vector_store.add_texts(texts=texts, metadatas=metadatas)
         print("[VS ADD DEBUG] add_texts successful.")
-        vector_store.persist()
-        print(f"[VS ADD DEBUG] Successfully added and persisted texts to vector store for process {process_id} (doc: {document_id}).")
+        # Note: In newer versions of ChromaDB, persistence is automatic when persist_directory is set
+        print(f"[VS ADD DEBUG] Successfully added texts to vector store for process {process_id} (doc: {document_id}).")
         return True
     except Exception as e:
         print(f"[VS ADD DEBUG] Error adding texts to vector store: {e}")

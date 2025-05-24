@@ -95,49 +95,40 @@ async def upload_file_for_process(process_id: UUID, file: UploadFile = File(...)
         with open(file_location, "wb+") as file_object:
             shutil.copyfileobj(file.file, file_object)
         
-        # Log file upload as a system message
+        # Log file upload as a user message (commit immediately so it appears first)
         db_upload_msg = models.ChatMessage(
             process_id=process_id,
-            sender_type="system", # Or 'user' if preferred to show who uploaded
-            content=f"File uploaded: {file.filename} ({file.content_type})"
+            sender_type="user",
+            content=f"Uploaded: {file.filename}"
         )
         db.add(db_upload_msg)
-        # db.commit() # Commit immediately or batch later
+        db.commit()  # Commit user upload message immediately
+        db.refresh(db_upload_msg)
+        
+        print(f"Saved user upload message: 'Uploaded: {file.filename}' for process {process_id}")
 
         text_content_for_vector_store = None
+        ai_response_text = ""
 
         if file.content_type and file.content_type.startswith("audio/"):
+            print(f"Processing audio file: {file.filename}")
             transcript_text = await transcribe_audio_with_whisper(file_location)
             if transcript_text and not transcript_text.startswith("Error"):
                 text_content_for_vector_store = transcript_text
-                db_transcript_msg = models.ChatMessage(
-                    process_id=process_id,
-                    sender_type="ai", # AI generated the transcript
-                    content=f"Audio transcribed (first 100 chars): {transcript_text[:100]}..."
-                )
-                db.add(db_transcript_msg)
+                ai_response_text = f"Thank you for the voice message. I've processed your audio and can now help you better with your process documentation."
             elif transcript_text: # Error in transcription
-                db_transcript_err_msg = models.ChatMessage(
-                    process_id=process_id,
-                    sender_type="system",
-                    content=f"Audio transcription failed for {file.filename}: {transcript_text}"
-                )
-                db.add(db_transcript_err_msg)
+                ai_response_text = f"I had trouble processing the audio file. Please try again or use text/document input."
 
         elif file.content_type in SUPPORTED_MIME_TYPES:
+            print(f"Processing document file: {file.filename} ({file.content_type})")
             extracted_doc_text = extract_text_from_file(file_location, file.content_type)
             if extracted_doc_text and not extracted_doc_text.startswith("Error"):
                 text_content_for_vector_store = extracted_doc_text
-                snippet_for_chat = extracted_doc_text[:200] + ("..." if len(extracted_doc_text) > 200 else "")
-                db_doc_extract_msg = models.ChatMessage(
-                    process_id=process_id,
-                    sender_type="ai", # AI extracted the text
-                    content=f"Text extracted from {file.filename} (first 200 chars): {snippet_for_chat}"
-                )
-                db.add(db_doc_extract_msg)
+                ai_response_text = f"Thank you for providing the document \"{file.filename}\". I've processed and analyzed the content to better understand your process. Feel free to ask me any questions about it!"
 
                 structured_data_from_doc_model = await extract_process_from_text(extracted_doc_text)
                 if structured_data_from_doc_model:
+                    ai_response_text += "\n\nI've also identified some process information from your upload that I've added to the documentation."
                     for key, value in structured_data_from_doc_model.model_dump(exclude_none=True).items():
                         if hasattr(db_process, key):
                             if isinstance(value, list) and isinstance(getattr(db_process, key), list):
@@ -149,9 +140,20 @@ async def upload_file_for_process(process_id: UUID, file: UploadFile = File(...)
                                 setattr(db_process, key, value)
                     db.commit()
                     db.refresh(db_process)
-        
-        # One commit for all messages added in this try block so far
-        db.commit()
+            else:
+                ai_response_text = f"I had trouble extracting text from the document. Please ensure it's a valid PDF or DOCX file."
+
+        # Save the AI response (after processing is complete)
+        if ai_response_text:
+            db_ai_response_msg = models.ChatMessage(
+                process_id=process_id,
+                sender_type="ai",
+                content=ai_response_text
+            )
+            db.add(db_ai_response_msg)
+            db.commit()  # Commit AI response
+            db.refresh(db_ai_response_msg)
+            print(f"Saved AI response message for process {process_id}")
 
         if text_content_for_vector_store:
             print(f"Adding text from {file.filename} to vector store for process {process_id}")
@@ -173,7 +175,8 @@ async def upload_file_for_process(process_id: UUID, file: UploadFile = File(...)
         transcript=transcript_text,
         extracted_text_snippet=extracted_doc_text[:500] + ("..." if extracted_doc_text and len(extracted_doc_text) > 500 else "") if extracted_doc_text else None,
         extracted_process_data=structured_data_from_doc_model,
-        vector_store_status="Content added to vector store" if added_to_vector_store else "Failed or not applicable"
+        vector_store_status="Content added to vector store" if added_to_vector_store else "Failed or not applicable",
+        ai_response=ai_response_text  # Include AI response for frontend
     )
 
 @router.post("/processes/{process_id}/chat", response_model=schemas.ChatResponse)
@@ -185,6 +188,37 @@ async def process_chat(process_id: UUID, message_payload: Dict[str, str], db: Se
     user_message = message_payload.get("text", "")
     if not user_message:
         raise HTTPException(status_code=400, detail="Message text cannot be empty")
+
+    # Handle welcome message for new processes
+    if user_message == "SYSTEM_WELCOME_MESSAGE":
+        # Check if any messages already exist for this process
+        existing_messages = db.query(models.ChatMessage).filter(models.ChatMessage.process_id == process_id).count()
+        
+        if existing_messages == 0:
+            welcome_text = "Hello! Let's start documenting your process. You can describe your process, upload documents, or ask me any questions to help build comprehensive documentation."
+            
+            # Save AI welcome message to DB
+            db_welcome_message = models.ChatMessage(
+                process_id=process_id,
+                sender_type="ai",
+                content=welcome_text
+            )
+            db.add(db_welcome_message)
+            db.commit()
+            db.refresh(db_welcome_message)
+            
+            return schemas.ChatResponse(
+                user_message="",  # No user message for welcome
+                ai_chat_response=welcome_text,
+                extracted_process_data=None
+            )
+        else:
+            # If messages already exist, don't create welcome message
+            return schemas.ChatResponse(
+                user_message="",
+                ai_chat_response="",
+                extracted_process_data=None
+            )
 
     # 1. Fetch recent chat history (e.g., last 10 messages)
     db_chat_history = (

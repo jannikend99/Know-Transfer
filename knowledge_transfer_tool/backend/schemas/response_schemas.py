@@ -13,6 +13,7 @@ class FileUploadResponse(BaseModel):
     extracted_text_snippet: Optional[str] = None
     extracted_process_data: Optional[ProcessBase] = None # Reuse ProcessBase or a sub-model
     vector_store_status: Optional[str] = None
+    ai_response: Optional[str] = None  # Add AI response text
 
 class ChatResponse(BaseModel):
     user_message: str
