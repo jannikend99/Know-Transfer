@@ -1,29 +1,56 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
+import ReactMarkdown from 'react-markdown';
 
-const ChatHistory = ({ messages = [] }) => {
+const ChatHistory = ({ messages = [], isTyping = false }) => {
+  const messagesEndRef = useRef(null);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "auto" });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages, isTyping]);
+
   const historyStyle = {
     flexGrow: 1,
     overflowY: 'auto',
     padding: '10px',
-    border: '1px solid #f0f0f0',
-    borderRadius: 'var(--border-radius, 8px)',
-    marginBottom: 'var(--spacing-unit, 16px)',
     minHeight: '200px', // Ensure it takes some space
-    backgroundColor: '#f9f9f9'
   };
 
   const messageStyle = (isUser) => ({
-    textAlign: isUser ? 'right' : 'left',
+    display: 'flex',
+    justifyContent: isUser ? 'flex-end' : 'flex-start',
     marginBottom: '10px',
+  });
+
+  const messageBubbleStyle = (isUser) => ({
     padding: '8px 12px',
     borderRadius: '15px',
     maxWidth: '70%',
+    minWidth: 'auto',
     wordWrap: 'break-word',
     backgroundColor: isUser ? 'var(--primary-color)' : '#e9ecef',
     color: isUser ? 'white' : '#333',
-    marginLeft: isUser ? 'auto' : '0',
-    marginRight: isUser ? '0' : 'auto',
+    display: 'inline-block',
   });
+
+  const typingIndicatorStyle = {
+    display: 'flex',
+    justifyContent: 'flex-start',
+    marginBottom: '10px',
+  };
+
+  const typingBubbleStyle = {
+    padding: '8px 12px',
+    borderRadius: '15px',
+    backgroundColor: '#e9ecef',
+    color: '#333',
+    display: 'flex',
+    alignItems: 'center',
+    height: '40px'
+  };
 
   const sampleMessages = [
     { id: '1', text: 'Hello! How can I define the new onboarding process?', type: 'user' },
@@ -37,10 +64,39 @@ const ChatHistory = ({ messages = [] }) => {
     <div style={historyStyle}>
       {displayMessages.map((msg, index) => (
         <div key={msg.id || index} style={messageStyle(msg.type === 'user')}>
-          {msg.text}
+          <div style={messageBubbleStyle(msg.type === 'user')}>
+            <ReactMarkdown 
+              className="chat-message"
+              components={{
+                // Customize markdown rendering for chat bubbles
+                p: ({ children }) => <div style={{ margin: 0 }}>{children}</div>,
+                ul: ({ children }) => <ul style={{ margin: '0', paddingLeft: '16px' }}>{children}</ul>,
+                ol: ({ children }) => <ol style={{ margin: '0', paddingLeft: '16px' }}>{children}</ol>,
+                code: ({ children }) => <code style={{ backgroundColor: 'rgba(0,0,0,0.1)', padding: '2px 4px', borderRadius: '4px' }}>{children}</code>,
+                pre: ({ children }) => <pre style={{ backgroundColor: 'rgba(0,0,0,0.1)', padding: '8px', borderRadius: '4px', margin: '4px 0', overflow: 'auto' }}>{children}</pre>,
+              }}
+            >
+              {msg.text}
+            </ReactMarkdown>
+          </div>
         </div>
       ))}
-      {/* Add a ref here to scroll to bottom for new messages */}
+      
+      {/* Typing indicator */}
+      {isTyping && (
+        <div style={typingIndicatorStyle}>
+          <div style={typingBubbleStyle}>
+            <div className="typing-indicator">
+              <span></span>
+              <span></span>
+              <span></span>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Invisible element to scroll to */}
+      <div ref={messagesEndRef} />
     </div>
   );
 };

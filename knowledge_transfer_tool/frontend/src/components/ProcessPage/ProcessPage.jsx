@@ -298,13 +298,11 @@ const ProcessPage = () => {
           <div className="h-full flex gap-6">
             {/* Chat Interface - Left Side - 1/3 width */}
             <div className="w-1/3 min-w-0 flex-shrink-0 h-full">
-              <div className="h-full border rounded-lg bg-card">
-                <ChatInterface 
-                  processId={processId} 
-                  processData={processData} 
-                  onProcessDataUpdate={handleProcessDataNeedsUpdate}
-                />
-              </div>
+              <ChatInterface 
+                processId={processId} 
+                processData={processData} 
+                onProcessDataUpdate={handleProcessDataNeedsUpdate}
+              />
             </div>
             
             {/* Right Side - Process Details & Visualization - 2/3 width */}

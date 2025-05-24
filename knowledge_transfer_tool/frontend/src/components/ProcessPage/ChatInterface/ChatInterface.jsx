@@ -8,8 +8,6 @@ import DocumentUpload from './DocumentUpload';
 import {
   Card,
   CardContent,
-  CardHeader,
-  CardTitle,
 } from "../../ui/card";
 
 import { Button } from "../../ui/button";
@@ -150,23 +148,8 @@ const ChatInterface = ({ processId: propProcessId, processData, onProcessDataUpd
 
   return (
     <Card className="h-full flex flex-col shadow-sm">
-      {/* Header */}
-      <CardHeader className="flex-shrink-0 pb-3">
-        <div className="flex items-center space-x-2">
-          <div className="flex items-center justify-center w-8 h-8 bg-primary/10 rounded-lg">
-            <MessageSquare className="h-4 w-4 text-primary" />
-          </div>
-          <div>
-            <CardTitle className="text-lg">AI Assistant</CardTitle>
-            <p className="text-sm text-muted-foreground">
-              {processId ? `Process: ${processId.substring(0, 8)}...` : 'No process ID'}
-            </p>
-          </div>
-        </div>
-      </CardHeader>
-
       {/* Chat History */}
-      <CardContent className="flex-1 overflow-hidden pt-0">
+      <CardContent className="flex-1 overflow-hidden p-6">
         <div className="h-full flex flex-col">
           <div 
             className="flex-1 overflow-auto mb-4"
@@ -175,47 +158,36 @@ const ChatInterface = ({ processId: propProcessId, processData, onProcessDataUpd
               touchAction: 'pan-y'
             }}
           >
-            <ChatHistory messages={messages} />
+            <ChatHistory messages={messages} isTyping={isSending} />
           </div>
 
           {/* Input Area */}
-          <div className="flex-shrink-0 space-y-3 border-t pt-3">
-            {/* Text Input */}
-            <form onSubmit={handleTextSubmit} className="flex gap-2">
+          <div className="flex-shrink-0 space-y-3 pt-3">
+            {/* Text Input with integrated controls */}
+            <form onSubmit={handleTextSubmit} className="relative">
               <Input
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
                 placeholder="Type your message..."
                 disabled={isSending || !processId}
-                className="flex-1"
+                className="flex-1 pr-24"
               />
-              <Button 
-                type="submit" 
-                disabled={!message.trim() || isSending || !processId}
-                size="icon"
-                className="px-3"
-              >
-                <Send className="h-4 w-4" />
-              </Button>
+              <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                <VoiceInput onSendVoice={handleSendMessage} disabled={isSending || !processId} />
+                <DocumentUpload onSendDocument={handleSendMessage} disabled={isSending || !processId} />
+                <Button 
+                  type="submit" 
+                  disabled={!message.trim() || isSending || !processId}
+                  size="icon"
+                  variant="ghost"
+                  className="h-8 w-8"
+                >
+                  <Send className="h-4 w-4" />
+                </Button>
+              </div>
             </form>
 
-            {/* Action Buttons */}
-            <div className="flex gap-2">
-              <VoiceInput onSendVoice={handleSendMessage} disabled={isSending || !processId} />
-              <DocumentUpload onSendDocument={handleSendMessage} disabled={isSending || !processId} />
-            </div>
-
-            {/* Status Messages */}
-            {isSending && (
-              <div className="text-center">
-                <p className="text-sm text-muted-foreground">
-                  <span className="inline-flex items-center">
-                    <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-primary mr-2"></div>
-                    Communicating with AI...
-                  </span>
-                </p>
-              </div>
-            )}
+            {/* Error Messages Only */}
             {error && (
               <div className="text-center">
                 <p className="text-sm text-destructive">Error: {error}</p>

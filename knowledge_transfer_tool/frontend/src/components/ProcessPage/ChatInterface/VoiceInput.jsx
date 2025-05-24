@@ -55,22 +55,18 @@ const VoiceInput = ({ onSendVoice, disabled }) => {
 
   return (
     <Button
-      variant={isRecording ? "destructive" : "outline"}
-      size="sm"
+      variant="ghost"
+      size="icon"
+      type="button"
       onClick={isRecording ? handleStopRecording : handleStartRecording}
       disabled={disabled}
-      className="flex items-center space-x-2"
+      className={`h-8 w-8 ${isRecording ? 'text-red-500 hover:text-red-600' : 'text-muted-foreground hover:text-foreground'}`}
+      title={isRecording ? 'Stop Recording' : 'Voice Input'}
     >
       {isRecording ? (
-        <>
-          <MicOff className="h-4 w-4" />
-          <span>Stop Recording</span>
-        </>
+        <MicOff className="h-4 w-4" />
       ) : (
-        <>
-          <Mic className="h-4 w-4" />
-          <span>Voice</span>
-        </>
+        <Mic className="h-4 w-4" />
       )}
     </Button>
   );

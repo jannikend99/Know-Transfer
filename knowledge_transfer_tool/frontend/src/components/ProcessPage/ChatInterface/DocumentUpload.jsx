@@ -60,22 +60,18 @@ const DocumentUpload = ({ onSendDocument, disabled }) => {
         disabled={disabled || isUploading}
       />
       <Button
-        variant="outline"
-        size="sm"
+        variant="ghost"
+        size="icon"
+        type="button"
         onClick={handleButtonClick}
         disabled={disabled || isUploading}
-        className="flex items-center space-x-2"
+        className="h-8 w-8 text-muted-foreground hover:text-foreground"
+        title={isUploading ? 'Uploading...' : 'Upload Document'}
       >
         {isUploading ? (
-          <>
-            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current"></div>
-            <span>Uploading...</span>
-          </>
+          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current"></div>
         ) : (
-          <>
-            <Upload className="h-4 w-4" />
-            <span>Upload Doc</span>
-          </>
+          <Upload className="h-4 w-4" />
         )}
       </Button>
     </>
