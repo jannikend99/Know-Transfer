@@ -2,25 +2,29 @@ import React from 'react';
 
 // This component will show a checklist of populated fields or extraction status.
 const ProcessChecklist = ({ processData }) => {
+  // Match the backend's 9 user dimensions (including overview)
   const checklist = [
-    { field: 'general_description', label: 'General Description' },
+    { field: 'general_description', label: 'Overview' },
+    { field: 'scope_included', label: 'Scope Included' },
+    { field: 'scope_excluded', label: 'Scope Excluded' },
     { field: 'process_steps', label: 'Process Steps' },
-    { field: 'scope', label: 'Scope' },
     { field: 'inputs', label: 'Inputs' },
     { field: 'outputs', label: 'Outputs' },
     { field: 'kpis', label: 'KPIs' },
     { field: 'roles_responsibilities', label: 'Roles & Responsibilities' },
-    { field: 'exceptions_special_cases', label: 'Exceptions & Special Cases' },
-    { field: 'visualization_graph', label: 'Visualization Graph' }
+    { field: 'exceptions_special_cases', label: 'Exceptions & Special Cases' }
   ];
 
   const isFieldPopulated = (field) => {
     if (!processData) return false;
     const value = processData[field];
     if (Array.isArray(value)) {
-      return value.length > 0;
+      // Match backend's strict criteria: need at least 2 substantial items (30+ characters each)
+      const substantial = value.filter(item => item && item.trim().length >= 30);
+      return substantial.length >= 2;
     }
-    return !!value; // True if value is truthy (not null, undefined, empty string, 0, false)
+    // For text fields, need at least 100 characters
+    return value && value.trim && value.trim().length >= 100;
   };
 
   const itemStyle = (populated) => ({
@@ -37,7 +41,7 @@ const ProcessChecklist = ({ processData }) => {
 
   return (
     <div>
-      <h5>Extraction Checklist</h5>
+      <h5>Documentation Checklist</h5>
       <ul style={listStyle}>
         {checklist.map(item => (
           <li key={item.field} style={itemStyle(isFieldPopulated(item.field))}>

@@ -1,13 +1,13 @@
 from pydantic import BaseModel, Field
 from typing import List, Optional
-from uuid import UUID
 from datetime import datetime
 
 class ProcessBase(BaseModel):
     title: Optional[str] = None
     general_description: Optional[str] = None
     process_steps: Optional[List[str]] = []
-    scope: Optional[str] = None
+    scope_included: Optional[List[str]] = []
+    scope_excluded: Optional[List[str]] = []
     inputs: Optional[List[str]] = []
     outputs: Optional[List[str]] = []
     kpis: Optional[List[str]] = []
@@ -22,7 +22,7 @@ class ProcessUpdate(ProcessBase):
     pass
 
 class Process(ProcessBase):
-    id: UUID
+    id: str
     created_at: datetime
     updated_at: datetime
 

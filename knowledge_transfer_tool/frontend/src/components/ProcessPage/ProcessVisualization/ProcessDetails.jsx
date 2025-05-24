@@ -70,15 +70,106 @@ const ProcessDetails = ({ processData }) => {
   const getProcessCompletion = () => {
     if (!processData) return { completed: 0, total: 0, percentage: 0, missing: [] };
 
+    // Match the backend's 9 user dimensions (including overview)
     const categories = [
-      { key: 'general_description', name: 'General Description', check: (data) => data.general_description && data.general_description.trim() },
-      { key: 'scope', name: 'Scope', check: (data) => data.scope && data.scope.trim() },
-      { key: 'process_steps', name: 'Process Steps', check: (data) => Array.isArray(data.process_steps) && data.process_steps.length > 0 },
-      { key: 'inputs', name: 'Inputs', check: (data) => Array.isArray(data.inputs) && data.inputs.length > 0 },
-      { key: 'outputs', name: 'Outputs', check: (data) => Array.isArray(data.outputs) && data.outputs.length > 0 },
-      { key: 'kpis', name: 'Key Performance Indicators', check: (data) => Array.isArray(data.kpis) && data.kpis.length > 0 },
-      { key: 'roles_responsibilities', name: 'Roles & Responsibilities', check: (data) => Array.isArray(data.roles_responsibilities) && data.roles_responsibilities.length > 0 },
-      { key: 'exceptions_special_cases', name: 'Exceptions & Special Cases', check: (data) => Array.isArray(data.exceptions_special_cases) && data.exceptions_special_cases.length > 0 }
+      { 
+        key: 'general_description', 
+        name: 'Overview', 
+        check: (data) => {
+          const desc = data.general_description;
+          if (!desc || !desc.trim) return false;
+          // Need at least 100 characters for text fields
+          return desc.trim().length >= 100;
+        }
+      },
+      { 
+        key: 'scope_included', 
+        name: 'Scope Included', 
+        check: (data) => {
+          const items = data.scope_included;
+          if (!Array.isArray(items) || items.length === 0) return false;
+          // Need at least 2 substantial items (30+ characters each)
+          const substantial = items.filter(item => item && item.trim().length >= 30);
+          return substantial.length >= 2;
+        }
+      },
+      { 
+        key: 'scope_excluded', 
+        name: 'Scope Excluded', 
+        check: (data) => {
+          const items = data.scope_excluded;
+          if (!Array.isArray(items) || items.length === 0) return false;
+          // Need at least 2 substantial items (30+ characters each)
+          const substantial = items.filter(item => item && item.trim().length >= 30);
+          return substantial.length >= 2;
+        }
+      },
+      { 
+        key: 'process_steps', 
+        name: 'Process Steps', 
+        check: (data) => {
+          const steps = data.process_steps;
+          if (!Array.isArray(steps) || steps.length === 0) return false;
+          // Need at least 2 substantial items (30+ characters each)
+          const substantial = steps.filter(step => step && step.trim().length >= 30);
+          return substantial.length >= 2;
+        }
+      },
+      { 
+        key: 'inputs', 
+        name: 'Inputs', 
+        check: (data) => {
+          const items = data.inputs;
+          if (!Array.isArray(items) || items.length === 0) return false;
+          // Need at least 2 substantial items (30+ characters each)
+          const substantial = items.filter(item => item && item.trim().length >= 30);
+          return substantial.length >= 2;
+        }
+      },
+      { 
+        key: 'outputs', 
+        name: 'Outputs', 
+        check: (data) => {
+          const items = data.outputs;
+          if (!Array.isArray(items) || items.length === 0) return false;
+          // Need at least 2 substantial items (30+ characters each)
+          const substantial = items.filter(item => item && item.trim().length >= 30);
+          return substantial.length >= 2;
+        }
+      },
+      { 
+        key: 'kpis', 
+        name: 'Key Performance Indicators', 
+        check: (data) => {
+          const items = data.kpis;
+          if (!Array.isArray(items) || items.length === 0) return false;
+          // Need at least 2 substantial items (30+ characters each)
+          const substantial = items.filter(item => item && item.trim().length >= 30);
+          return substantial.length >= 2;
+        }
+      },
+      { 
+        key: 'roles_responsibilities', 
+        name: 'Roles & Responsibilities', 
+        check: (data) => {
+          const items = data.roles_responsibilities;
+          if (!Array.isArray(items) || items.length === 0) return false;
+          // Need at least 2 substantial items (30+ characters each)
+          const substantial = items.filter(item => item && item.trim().length >= 30);
+          return substantial.length >= 2;
+        }
+      },
+      { 
+        key: 'exceptions_special_cases', 
+        name: 'Exceptions & Special Cases', 
+        check: (data) => {
+          const items = data.exceptions_special_cases;
+          if (!Array.isArray(items) || items.length === 0) return false;
+          // Need at least 2 substantial items (30+ characters each)
+          const substantial = items.filter(item => item && item.trim().length >= 30);
+          return substantial.length >= 2;
+        }
+      }
     ];
 
     const completed = categories.filter(cat => cat.check(processData)).length;
@@ -394,10 +485,40 @@ const ProcessDetails = ({ processData }) => {
               <span>Scope</span>
             </CardTitle>
           </CardHeader>
-          <CardContent className="pt-0">
-            <p className="text-sm leading-relaxed text-muted-foreground">
-              {processData.scope || 'Not specified'}
-            </p>
+          <CardContent className="pt-0 space-y-4">
+            {/* Scope Included */}
+            <div>
+              <h4 className="text-sm font-medium text-muted-foreground mb-2">Included:</h4>
+              {Array.isArray(processData.scope_included) && processData.scope_included.length > 0 ? (
+                <div className="space-y-1">
+                  {processData.scope_included.map((item, index) => (
+                    <div key={index} className="flex items-start space-x-2">
+                      <CheckCircle className="h-3 w-3 text-green-500 mt-0.5 flex-shrink-0" />
+                      <span className="text-xs text-muted-foreground">{item}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground italic">Not specified</p>
+              )}
+            </div>
+
+            {/* Scope Excluded */}
+            <div>
+              <h4 className="text-sm font-medium text-muted-foreground mb-2">Excluded:</h4>
+              {Array.isArray(processData.scope_excluded) && processData.scope_excluded.length > 0 ? (
+                <div className="space-y-1">
+                  {processData.scope_excluded.map((item, index) => (
+                    <div key={index} className="flex items-start space-x-2">
+                      <Circle className="h-3 w-3 text-red-500 mt-0.5 flex-shrink-0" />
+                      <span className="text-xs text-muted-foreground">{item}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground italic">Not specified</p>
+              )}
+            </div>
           </CardContent>
         </Card>
       </div>

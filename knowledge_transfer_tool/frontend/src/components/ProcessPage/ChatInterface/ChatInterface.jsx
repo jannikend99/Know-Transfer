@@ -242,7 +242,7 @@ const ChatInterface = ({ processId: propProcessId, processData, onProcessDataUpd
                 onChange={(e) => setMessage(e.target.value)}
                 placeholder="Type your message..."
                 disabled={isSending || !processId}
-                className="flex-1 pr-24"
+                className="flex-1 pr-32"
               />
               <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
                 <VoiceInput onSendVoice={handleSendMessage} disabled={isSending || !processId} />

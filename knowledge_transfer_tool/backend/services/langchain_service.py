@@ -19,7 +19,7 @@ from langchain_core.documents import Document
 # Initialize LLM first
 llm = None
 if get_openai_client(): # Ensure openai_service.get_openai_client() is defined before this block
-    llm = ChatOpenAI(model_name="gpt-3.5-turbo", temperature=0)
+    llm = ChatOpenAI(model_name="gpt-4.1-mini-2025-04-14", temperature=0.7)
     print("LangChain ChatOpenAI LLM initialized.")
 else:
     print("WARNING: OpenAI client not available, LangChain LLM not initialized. AI chat features may not work.")
@@ -43,11 +43,72 @@ def get_basic_chat_chain():
         print("LLM not initialized, cannot create RAG chat chain.")
         return None
     
-    # Updated prompt for RAG
+    # Updated prompt for comprehensive process documentation with progress tracking
     prompt_template = ChatPromptTemplate.from_messages([
-        ("system", "You are a helpful AI assistant. Answer the user's questions based on the ongoing conversation and the following retrieved context from relevant documents. If the context isn't relevant or doesn't provide an answer, say you don't know based on the documents and rely on the conversation or your general knowledge. Be concise."),
-        MessagesPlaceholder(variable_name="chat_history"), # Existing conversation history
-        ("user", "Based on our conversation and the following context from documents:\n--- CONTEXT START ---\n{retrieved_context}\n--- CONTEXT END ---\nMy question is: {text}") # User's current input, framed with context
+        ("system", """You are an expert Business Process Documentation Assistant. Help users create complete process documentation through natural, step-by-step conversation.
+
+COMMUNICATION STYLE:
+- Keep responses SHORT and focused (2-3 sentences max)
+- Ask ONE main question at a time 
+- Use **markdown formatting** for better structure
+- Be conversational and natural, not overwhelming
+- Use your judgment - if information seems incomplete, ask for more details
+- Guide users step-by-step, don't dump everything at once
+- Use NATURAL LANGUAGE - never mention technical field names like "SCOPE_INCLUDED" or system terminology
+
+TITLE & DESCRIPTION GENERATION:
+- **GENERATE TITLE**: Only after you understand what the process does (usually after 2-3 exchanges)
+- **GENERATE DESCRIPTION**: Only after you have sufficient context about purpose, scope, and basic flow (usually after 4-5 exchanges or when user provides substantial detail)
+- These are AI-generated and don't count toward user's 9-dimension progress
+- Wait until you have enough context to write meaningful title
+
+USER DIMENSIONS TO COLLECT (9 dimensions for progress tracking):
+1. **Overview description**: What the process does and its purpose (needs 100+ characters)
+2. **What's included in scope**: What aspects, areas, or activities are covered by this process (needs 2+ substantial items)
+3. **What's excluded from scope**: What's specifically NOT covered or handled by this process (needs 2+ substantial items)
+4. **Process steps**: Detailed sequence of activities and decision points (needs comprehensive steps)
+5. **Required inputs**: Materials, information, or resources needed to start (needs 2+ detailed items)
+6. **Expected outputs**: Deliverables, results, or outcomes produced (needs 2+ detailed items)
+7. **Success metrics**: How performance is measured and tracked (needs 2+ detailed metrics)
+8. **Roles and responsibilities**: Who does what and has authority for decisions (needs 2+ detailed roles)
+9. **Exception handling**: What happens when things go wrong or unusual situations arise (needs 2+ detailed scenarios)
+
+COMPLETION CRITERIA (for progress tracking):
+- **Lists**: Need at least 2 substantial items (30+ characters each) to count as COMPLETE
+- **Text fields**: Need at least 100+ characters of detailed content to count as COMPLETE
+- **Partial information doesn't count toward progress** - only comprehensive information does
+
+NATURAL LANGUAGE GUIDELINES:
+- Ask about "what's included in the scope" not "scope_included"
+- Ask about "process steps" not "PROCESS_STEPS" 
+- Ask about "inputs needed" not "INPUTS"
+- Ask about "expected results" not "OUTPUTS"
+- Ask about "success metrics" not "KPIS"
+- Ask about "who's responsible" not "ROLES_RESPONSIBILITIES"
+- Ask about "exception handling" not "EXCEPTIONS_SPECIAL_CASES"
+- Always use conversational, business-friendly language
+
+FORMATTING STANDARDS (always use these formats when generating structured content):
+- **Scope items**: "• [Item 1] • [Item 2] • [Item 3]..."
+- **Process steps**: "1. [Action] 2. [Action] 3. [Decision Point] 4. [Action]..."
+- **Inputs**: "• [Input Name]: [Format/Source/Quality criteria]"
+- **Outputs**: "• [Output Name]: [Format/Destination/Success criteria]"
+- **Success Metrics**: "• [Metric Name]: [Measurement method] | **Target:** [value] | **Frequency:** [timing]"
+- **Roles**: "• **[Role]:** [Specific responsibility and authority]"
+- **Exceptions**: "• **[Scenario]:** [Response/Action] | **Escalation:** [process]"
+
+RESPONSE GUIDELINES:
+- Use **markdown formatting** for structure and emphasis
+- Start with brief acknowledgment of what they shared
+- Ask ONE specific follow-up question about missing/incomplete dimensions
+- Apply consistent formatting standards to collected information
+- Keep it conversational and encouraging
+- Focus on getting COMPLETE information for each dimension
+- Use natural business language, never technical field names
+
+Remember: Only generate title/description when you have sufficient context. Focus on getting complete, comprehensive information for each user dimension using natural, conversational language."""),
+        MessagesPlaceholder(variable_name="chat_history"),
+        ("user", "Context from uploaded documents:\n--- DOCUMENT CONTEXT ---\n{retrieved_context}\n--- END CONTEXT ---\n\nUser input: {text}")
     ])
     
     chain = prompt_template | llm
@@ -115,14 +176,42 @@ async def run_basic_chat_chain(input_text: str, process_id: str, chat_history: L
 process_output_parser = PydanticOutputParser(pydantic_object=ProcessBase)
 
 EXTRACT_PROCESS_PROMPT_TEMPLATE = """
-From the following text, extract the details of a business process. 
-If a field is not mentioned, leave it as null or an empty list as appropriate.
+You are an expert Business Process Analyst. Your task is to extract comprehensive process information from the provided text to create complete documentation.
+
+TARGET SCHEMA DIMENSIONS (Extract all available information):
+1. TITLE: Clear process name (if explicitly mentioned)
+2. GENERAL_DESCRIPTION: Overview of what the process does (if explicitly described)
+3. PROCESS_STEPS: Detailed sequence of activities, decision points, branching logic
+4. SCOPE_INCLUDED: What's included in this process, boundaries, covered areas
+5. SCOPE_EXCLUDED: What's excluded from this process, out-of-scope items
+6. INPUTS: Required materials/information, formats, quality criteria
+7. OUTPUTS: Deliverables, results, formats, success criteria
+8. KPIS: Metrics, measurement methods, targets, frequency
+9. ROLES_RESPONSIBILITIES: Who does what, approval authorities, accountability
+10. EXCEPTIONS_SPECIAL_CASES: Error scenarios, alternative paths, contingency procedures  
+11. VISUALIZATION_GRAPH: Process flow representation (if described in text)
+
+EXTRACTION GUIDELINES:
+- Extract ALL information that is explicitly mentioned or clearly implied
+- Be specific and detailed - avoid generic or assumed information  
+- If a field is not mentioned in the text, leave it as null or empty list
+- Focus on actionable, measurable, and verifiable details
+- Preserve exact terminology used in the source material
+- Extract everything available - title/description will be refined by AI if needed
+
+QUALITY STANDARDS:
+- Extract only factual information present in the text
+- Maintain specificity - "Sales Manager" not just "Manager"  
+- Include quantitative details (timeframes, quantities, percentages)
+- Flag ambiguous information rather than making assumptions
+- Extract all 11 dimensions when available in source material
 
 {format_instructions}
 
-Text to parse:
+TEXT TO ANALYZE:
 {text_to_parse}
-"""
+
+Remember: Extract everything available from the source. AI will generate/refine title and description later if needed."""
 
 def get_process_extraction_chain():
     if not llm:
@@ -278,5 +367,134 @@ async def generate_simple_html_visualization(process_data_text: str) -> str:
 </body>
 </html>"""
     return html_content
+
+def assess_process_documentation_progress(process_data: dict) -> dict:
+    """
+    Analyzes current process documentation state and returns progress assessment.
+    Focuses on 9 user-provided dimensions (including overview, split scope into 2)
+    Only counts dimensions as COMPLETE when they have comprehensive, detailed information.
+    
+    Args:
+        process_data: Dictionary with current process field values
+        
+    Returns:
+        Dictionary with progress analysis including completion status, missing fields, etc.
+    """
+    # Focus on the 9 dimensions users need to provide (including overview, split scope into 2)
+    user_dimensions = {
+        'general_description': 'Overview',
+        'scope_included': 'Scope (What\'s Included)',
+        'scope_excluded': 'Scope (What\'s Excluded)', 
+        'process_steps': 'Process Steps',
+        'inputs': 'Required Inputs',
+        'outputs': 'Expected Outputs',
+        'kpis': 'Success Metrics',
+        'roles_responsibilities': 'Roles & Responsibilities',
+        'exceptions_special_cases': 'Exception Handling'
+    }
+    
+    complete_fields = []
+    partial_fields = []
+    missing_fields = []
+    
+    for field_name, display_name in user_dimensions.items():
+        value = process_data.get(field_name)
+        
+        # Much stricter criteria for "complete" - must be comprehensive
+        if not value:
+            missing_fields.append(display_name)
+        elif isinstance(value, list):
+            if len(value) == 0:
+                missing_fields.append(display_name)
+            else:
+                # For lists, need at least 2 substantial items to be "complete"
+                substantial_items = [item for item in value if isinstance(item, str) and len(item.strip()) >= 30]
+                if len(substantial_items) >= 2:
+                    complete_fields.append(display_name)
+                else:
+                    partial_fields.append(display_name)
+        elif isinstance(value, str):
+            # For strings, need at least 100 characters of substantial content to be "complete"  
+            if len(value.strip()) == 0:
+                missing_fields.append(display_name)
+            elif len(value.strip()) >= 100:
+                complete_fields.append(display_name)
+            else:
+                partial_fields.append(display_name)
+        else:
+            # Other types considered complete if present
+            complete_fields.append(display_name)
+    
+    total_dimensions = len(user_dimensions)  # 9 user input dimensions
+    completion_percentage = (len(complete_fields) / total_dimensions) * 100
+    
+    return {
+        'total_dimensions': total_dimensions,
+        'complete_count': len(complete_fields),
+        'partial_count': len(partial_fields),
+        'missing_count': len(missing_fields),
+        'completion_percentage': completion_percentage,
+        'complete_fields': complete_fields,
+        'partial_fields': partial_fields,
+        'missing_fields': missing_fields,
+        'is_fully_documented': len(missing_fields) == 0 and len(partial_fields) == 0,
+        'next_priority_fields': missing_fields[:2] if missing_fields else partial_fields[:2]
+    }
+
+async def run_basic_chat_chain_with_progress(input_text: str, process_id: str, chat_history: List = [], current_process_data: dict = None):
+    """Enhanced chat chain that includes process documentation progress in the context."""
+    chain = get_basic_chat_chain()
+    if not chain or not embeddings_model:
+        return "RAG chat chain not available (LLM or Embeddings likely not initialized)."
+    
+    # Assess current documentation progress
+    progress_info = ""
+    if current_process_data:
+        progress = assess_process_documentation_progress(current_process_data)
+        
+        progress_info = f"""
+CURRENT DOCUMENTATION PROGRESS:
+- User Input Status: {progress['completion_percentage']:.0f}% complete ({progress['complete_count']}/{progress['total_dimensions']} dimensions FULLY COMPLETE)
+- Complete Areas: {', '.join(progress['complete_fields']) if progress['complete_fields'] else 'None yet'}
+- Partial Areas: {', '.join(progress['partial_fields']) if progress['partial_fields'] else 'None'}  
+- Missing Areas: {', '.join(progress['missing_fields']) if progress['missing_fields'] else 'None'}
+- Next Priority: {', '.join(progress['next_priority_fields']) if progress['next_priority_fields'] else 'All user input complete!'}
+
+COMPLETION STANDARDS:
+- Each area needs comprehensive, detailed information to count as complete
+- Partial information does not count toward progress - aim for thorough, complete answers
+- Ask follow-up questions to get complete information for each area
+
+TITLE/DESCRIPTION STATUS:
+- Title: {'Generated' if current_process_data.get('title') else 'Generate when process purpose is clear'}
+
+Focus on getting COMPLETE information for missing/partial areas using natural, conversational language. Only generate title when you have enough context.
+"""
+    
+    retrieved_context_str = "No relevant context found in documents for this query."
+    print(f"[RAG DEBUG] Initializing for process_id: {process_id}, query: '{input_text[:50]}...'")
+    try:
+        vector_store = get_vector_store(process_id)
+        if vector_store is not None:
+            retriever = vector_store.as_retriever(search_kwargs={"k": 3})
+            try:
+                retrieved_docs: List[Document] = await retriever.ainvoke(input_text)
+                if retrieved_docs:
+                    retrieved_context_str = "\n\n".join([doc.page_content for doc in retrieved_docs])
+            except Exception as e:
+                print(f"[RAG DEBUG] Error during vector store retrieval: {e}")
+
+        # Enhanced context with progress information
+        enhanced_context = f"{progress_info}\n\nDOCUMENT CONTEXT:\n{retrieved_context_str}"
+        
+        response_message = await chain.ainvoke({
+            "text": input_text, 
+            "chat_history": chat_history,
+            "retrieved_context": enhanced_context
+        })
+        return response_message.content 
+    except Exception as e:
+        print(f"Error running RAG chat chain: {e}")
+        return f"Error in LangChain RAG chat: {e}"
 
 print("LangChain service module loaded - with vector store capabilities.") 

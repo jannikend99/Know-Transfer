@@ -1,6 +1,5 @@
 from pydantic import BaseModel, Field
 from typing import Optional, Dict, Any, List
-from uuid import UUID
 from datetime import datetime # For timestamp
 from .process import ProcessBase # For extracted_process_data
 
@@ -26,8 +25,8 @@ class DocumentQueryResponse(BaseModel):
 
 # Schema for a single chat message for history
 class ChatMessageResponse(BaseModel):
-    id: UUID
-    process_id: UUID
+    id: str
+    process_id: str
     sender_type: str # 'user' or 'ai' or 'system'
     content: str
     message_metadata: Optional[Dict[str, Any]] = None

@@ -1,7 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, File, UploadFile, Response
 from sqlalchemy.orm import Session
 from typing import List, Dict, Any
-from uuid import UUID
 import os
 import shutil
 from io import BytesIO
@@ -17,7 +16,7 @@ from .. import models, schemas
 from ..database import get_db, UPLOAD_DIRECTORY
 from ..services.openai_service import transcribe_audio_with_whisper
 from ..services.langchain_service import (
-    run_basic_chat_chain, 
+    run_basic_chat_chain_with_progress, 
     extract_process_from_text,
     add_text_to_vector_store, # Added
     query_document_store,      # Added
@@ -41,14 +40,14 @@ def read_processes(skip: int = 0, limit: int = 100, db: Session = Depends(get_db
     return processes
 
 @router.get("/processes/{process_id}", response_model=schemas.Process)
-def read_process(process_id: UUID, db: Session = Depends(get_db)):
+def read_process(process_id: str, db: Session = Depends(get_db)):
     db_process = db.query(models.Process).filter(models.Process.id == process_id).first()
     if db_process is None:
         raise HTTPException(status_code=404, detail="Process not found")
     return db_process
 
 @router.put("/processes/{process_id}", response_model=schemas.Process)
-def update_process(process_id: UUID, process: schemas.ProcessUpdate, db: Session = Depends(get_db)):
+def update_process(process_id: str, process: schemas.ProcessUpdate, db: Session = Depends(get_db)):
     db_process = db.query(models.Process).filter(models.Process.id == process_id).first()
     if db_process is None:
         raise HTTPException(status_code=404, detail="Process not found")
@@ -63,7 +62,7 @@ def update_process(process_id: UUID, process: schemas.ProcessUpdate, db: Session
     return db_process
 
 @router.delete("/processes/{process_id}", response_model=schemas.Process)
-def delete_process(process_id: UUID, db: Session = Depends(get_db)):
+def delete_process(process_id: str, db: Session = Depends(get_db)):
     db_process = db.query(models.Process).filter(models.Process.id == process_id).first()
     if db_process is None:
         raise HTTPException(status_code=404, detail="Process not found")
@@ -80,7 +79,7 @@ def delete_process(process_id: UUID, db: Session = Depends(get_db)):
     return db_process
 
 @router.post("/processes/{process_id}/upload-file", response_model=schemas.FileUploadResponse)
-async def upload_file_for_process(process_id: UUID, file: UploadFile = File(...), db: Session = Depends(get_db)):
+async def upload_file_for_process(process_id: str, file: UploadFile = File(...), db: Session = Depends(get_db)):
     db_process = db.query(models.Process).filter(models.Process.id == process_id).first()
     if db_process is None:
         raise HTTPException(status_code=404, detail="Process not found")
@@ -115,20 +114,20 @@ async def upload_file_for_process(process_id: UUID, file: UploadFile = File(...)
             transcript_text = await transcribe_audio_with_whisper(file_location)
             if transcript_text and not transcript_text.startswith("Error"):
                 text_content_for_vector_store = transcript_text
-                ai_response_text = f"Thank you for the voice message. I've processed your audio and can now help you better with your process documentation."
+                ai_response_text = f"**Great!** I've transcribed your voice message and found some good process information. \n\nWhat **specific steps** are involved in this process?"
             elif transcript_text: # Error in transcription
-                ai_response_text = f"I had trouble processing the audio file. Please try again or use text/document input."
+                ai_response_text = f"I had trouble with that audio file. Could you try **recording again** or just tell me about your process in text?"
 
         elif file.content_type in SUPPORTED_MIME_TYPES:
             print(f"Processing document file: {file.filename} ({file.content_type})")
             extracted_doc_text = extract_text_from_file(file_location, file.content_type)
             if extracted_doc_text and not extracted_doc_text.startswith("Error"):
                 text_content_for_vector_store = extracted_doc_text
-                ai_response_text = f"Thank you for providing the document \"{file.filename}\". I've processed and analyzed the content to better understand your process. Feel free to ask me any questions about it!"
+                ai_response_text = f"**Excellent!** I've processed your document **\"{file.filename}\"** and found some useful process information. \n\nWhat are the **main steps** someone would follow in this process?"
 
                 structured_data_from_doc_model = await extract_process_from_text(extracted_doc_text)
                 if structured_data_from_doc_model:
-                    ai_response_text += "\n\nI've also identified some process information from your upload that I've added to the documentation."
+                    ai_response_text = f"**Perfect!** I found structured process information in **\"{file.filename}\"** and updated your documentation. \n\nWhat **inputs or materials** does someone need to start this process?"
                     for key, value in structured_data_from_doc_model.model_dump(exclude_none=True).items():
                         if hasattr(db_process, key):
                             if isinstance(value, list) and isinstance(getattr(db_process, key), list):
@@ -141,7 +140,7 @@ async def upload_file_for_process(process_id: UUID, file: UploadFile = File(...)
                     db.commit()
                     db.refresh(db_process)
             else:
-                ai_response_text = f"I had trouble extracting text from the document. Please ensure it's a valid PDF or DOCX file."
+                ai_response_text = f"I couldn't extract text from **\"{file.filename}\"**. Could you try a **different format** (PDF or DOCX work best) or just describe the key steps to me?"
 
         # Save the AI response (after processing is complete)
         if ai_response_text:
@@ -180,7 +179,7 @@ async def upload_file_for_process(process_id: UUID, file: UploadFile = File(...)
     )
 
 @router.post("/processes/{process_id}/chat", response_model=schemas.ChatResponse)
-async def process_chat(process_id: UUID, message_payload: Dict[str, str], db: Session = Depends(get_db)):
+async def process_chat(process_id: str, message_payload: Dict[str, str], db: Session = Depends(get_db)):
     db_process = db.query(models.Process).filter(models.Process.id == process_id).first()
     if db_process is None:
         raise HTTPException(status_code=404, detail="Process not found")
@@ -195,7 +194,11 @@ async def process_chat(process_id: UUID, message_payload: Dict[str, str], db: Se
         existing_messages = db.query(models.ChatMessage).filter(models.ChatMessage.process_id == process_id).count()
         
         if existing_messages == 0:
-            welcome_text = "Hello! Let's start documenting your process. You can describe your process, upload documents, or ask me any questions to help build comprehensive documentation."
+            welcome_text = """Hello! I'm your Business Process Documentation Assistant. 
+
+I'll help you create complete process documentation by asking targeted questions to capture every important detail. You can share information through text, voice messages, or document uploads.
+
+What process would you like to document today?"""
             
             # Save AI welcome message to DB
             db_welcome_message = models.ChatMessage(
@@ -254,13 +257,33 @@ async def process_chat(process_id: UUID, message_payload: Dict[str, str], db: Se
     # This is what the AI will see as the latest human input within the history context.
     langchain_history.append(HumanMessage(content=user_message))
 
-    # 3. Call LangChain service with history and process_id for RAG
-    ai_chat_response_text = await run_basic_chat_chain(
+    # 3. Call LangChain service with history and process_id for RAG, including current process state
+    current_process_data = {
+        'title': db_process.title,
+        'general_description': db_process.general_description,
+        'process_steps': db_process.process_steps or [],
+        'scope_included': db_process.scope_included or [],
+        'scope_excluded': db_process.scope_excluded or [],
+        'inputs': db_process.inputs or [],
+        'outputs': db_process.outputs or [],
+        'kpis': db_process.kpis or [],
+        'roles_responsibilities': db_process.roles_responsibilities or [],
+        'exceptions_special_cases': db_process.exceptions_special_cases or [],
+        'visualization_graph': db_process.visualization_graph
+    }
+    
+    ai_chat_response_text = await run_basic_chat_chain_with_progress(
         input_text=user_message, 
         process_id=str(process_id), # Ensure process_id is a string if langchain_service expects it that way
-        chat_history=langchain_history
+        chat_history=langchain_history,
+        current_process_data=current_process_data
     )
-    extracted_data_model = await extract_process_from_text(user_message) # Stays based on current message for now
+    
+    # Extract structured data from user message
+    extracted_data_model = await extract_process_from_text(user_message)
+    
+    # Also try to extract any structured data the AI might have generated in its response
+    ai_generated_data = await extract_process_from_text(ai_chat_response_text)
     
     # Save AI response to DB
     db_ai_chat_message = models.ChatMessage(
@@ -274,9 +297,9 @@ async def process_chat(process_id: UUID, message_payload: Dict[str, str], db: Se
     db.commit() # Commit both messages
     db.refresh(db_ai_chat_message)   # Optional
 
+    # Update process with extracted data from user message
     if extracted_data_model:
-        print(f"Extracted structured data from chat: {extracted_data_model.model_dump(exclude_none=True)}")
-        # Update the main Process object in the database with the extracted data
+        print(f"Extracted structured data from user message: {extracted_data_model.model_dump(exclude_none=True)}")
         for key, value in extracted_data_model.model_dump(exclude_none=True).items():
             if hasattr(db_process, key):
                 current_db_value = getattr(db_process, key)
@@ -288,6 +311,27 @@ async def process_chat(process_id: UUID, message_payload: Dict[str, str], db: Se
                 # For non-list fields, or if db field is not a list, overwrite if new value is provided
                 elif value is not None: 
                     setattr(db_process, key, value)
+    
+    # Update process with AI-generated data (title, description, formatted content)
+    if ai_generated_data:
+        print(f"Extracted AI-generated data: {ai_generated_data.model_dump(exclude_none=True)}")
+        for key, value in ai_generated_data.model_dump(exclude_none=True).items():
+            if hasattr(db_process, key) and value is not None:
+                # For title and description, always update if AI generated them
+                if key in ['title', 'general_description']:
+                    setattr(db_process, key, value)
+                # For other fields, use same logic as user data
+                else:
+                    current_db_value = getattr(db_process, key)
+                    if isinstance(value, list) and isinstance(current_db_value, list):
+                        new_items = [item for item in value if item not in current_db_value]
+                        if new_items:
+                            setattr(db_process, key, current_db_value + new_items)
+                    elif value is not None: 
+                        setattr(db_process, key, value)
+    
+    # Commit any process updates
+    if extracted_data_model or ai_generated_data:
         db.add(db_process) # Add db_process again to mark it as dirty for commit
         db.commit()        # Commit changes to the db_process
         db.refresh(db_process) # Refresh to get updated data if needed elsewhere
@@ -295,11 +339,11 @@ async def process_chat(process_id: UUID, message_payload: Dict[str, str], db: Se
     return schemas.ChatResponse(
         user_message=user_message, 
         ai_chat_response=ai_chat_response_text,
-        extracted_process_data=extracted_data_model
+        extracted_process_data=extracted_data_model or ai_generated_data
     )
 
 @router.post("/processes/{process_id}/query-documents", response_model=schemas.DocumentQueryResponse)
-async def query_process_documents(process_id: UUID, query_payload: Dict[str, str], db: Session = Depends(get_db)):
+async def query_process_documents(process_id: str, query_payload: Dict[str, str], db: Session = Depends(get_db)):
     user_query = query_payload.get("text", "")
     if not user_query:
         raise HTTPException(status_code=400, detail="Query text cannot be empty")
@@ -312,7 +356,7 @@ async def query_process_documents(process_id: UUID, query_payload: Dict[str, str
     )
 
 @router.get("/processes/{process_id}/chat-history", response_model=List[schemas.ChatMessageResponse])
-def get_chat_history(process_id: UUID, db: Session = Depends(get_db)):
+def get_chat_history(process_id: str, db: Session = Depends(get_db)):
     db_process = db.query(models.Process).filter(models.Process.id == process_id).first()
     if db_process is None:
         raise HTTPException(status_code=404, detail="Process not found")
@@ -328,7 +372,7 @@ def get_chat_history(process_id: UUID, db: Session = Depends(get_db)):
     return chat_history
 
 @router.get("/processes/{process_id}/visualize", response_class=Response)
-async def get_process_visualization(process_id: UUID, db: Session = Depends(get_db)):
+async def get_process_visualization(process_id: str, db: Session = Depends(get_db)):
     db_process = db.query(models.Process).filter(models.Process.id == process_id).first()
     if db_process is None:
         raise HTTPException(status_code=404, detail="Process not found")
@@ -346,7 +390,7 @@ async def get_process_visualization(process_id: UUID, db: Session = Depends(get_
     return Response(content=html_content, media_type="text/html")
 
 @router.get("/processes/{process_id}/export-pdf")
-async def export_process_to_pdf(process_id: UUID, db: Session = Depends(get_db)):
+async def export_process_to_pdf(process_id: str, db: Session = Depends(get_db)):
     """Export process details to PDF format"""
     db_process = db.query(models.Process).filter(models.Process.id == process_id).first()
     if db_process is None:

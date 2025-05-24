@@ -46,19 +46,101 @@ const ProcessCard = ({ process, onDelete }) => {
     ? displayDescription.substring(0, 120).trim() + '...' 
     : displayDescription;
 
-  // Calculate completion status
+  // Calculate completion status - match the backend's 9 user dimensions with strict criteria
   const getProcessCompletion = () => {
     if (!process) return { completed: 0, total: 0, percentage: 0 };
 
+    // Match the backend's 9 user dimensions (including overview)
     const categories = [
-      { key: 'general_description', check: (data) => data.general_description && data.general_description.trim() },
-      { key: 'scope', check: (data) => data.scope && data.scope.trim() },
-      { key: 'process_steps', check: (data) => Array.isArray(data.process_steps) && data.process_steps.length > 0 },
-      { key: 'inputs', check: (data) => Array.isArray(data.inputs) && data.inputs.length > 0 },
-      { key: 'outputs', check: (data) => Array.isArray(data.outputs) && data.outputs.length > 0 },
-      { key: 'kpis', check: (data) => Array.isArray(data.kpis) && data.kpis.length > 0 },
-      { key: 'roles_responsibilities', check: (data) => Array.isArray(data.roles_responsibilities) && data.roles_responsibilities.length > 0 },
-      { key: 'exceptions_special_cases', check: (data) => Array.isArray(data.exceptions_special_cases) && data.exceptions_special_cases.length > 0 }
+      { 
+        key: 'general_description', 
+        check: (data) => {
+          const desc = data.general_description;
+          if (!desc || !desc.trim) return false;
+          // Need at least 100 characters for text fields
+          return desc.trim().length >= 100;
+        }
+      },
+      { 
+        key: 'scope_included', 
+        check: (data) => {
+          const items = data.scope_included;
+          if (!Array.isArray(items) || items.length === 0) return false;
+          // Need at least 2 substantial items (30+ characters each)
+          const substantial = items.filter(item => item && item.trim().length >= 30);
+          return substantial.length >= 2;
+        }
+      },
+      { 
+        key: 'scope_excluded', 
+        check: (data) => {
+          const items = data.scope_excluded;
+          if (!Array.isArray(items) || items.length === 0) return false;
+          // Need at least 2 substantial items (30+ characters each)
+          const substantial = items.filter(item => item && item.trim().length >= 30);
+          return substantial.length >= 2;
+        }
+      },
+      { 
+        key: 'process_steps', 
+        check: (data) => {
+          const steps = data.process_steps;
+          if (!Array.isArray(steps) || steps.length === 0) return false;
+          // Need at least 2 substantial items (30+ characters each)
+          const substantial = steps.filter(step => step && step.trim().length >= 30);
+          return substantial.length >= 2;
+        }
+      },
+      { 
+        key: 'inputs', 
+        check: (data) => {
+          const items = data.inputs;
+          if (!Array.isArray(items) || items.length === 0) return false;
+          // Need at least 2 substantial items (30+ characters each)
+          const substantial = items.filter(item => item && item.trim().length >= 30);
+          return substantial.length >= 2;
+        }
+      },
+      { 
+        key: 'outputs', 
+        check: (data) => {
+          const items = data.outputs;
+          if (!Array.isArray(items) || items.length === 0) return false;
+          // Need at least 2 substantial items (30+ characters each)
+          const substantial = items.filter(item => item && item.trim().length >= 30);
+          return substantial.length >= 2;
+        }
+      },
+      { 
+        key: 'kpis', 
+        check: (data) => {
+          const items = data.kpis;
+          if (!Array.isArray(items) || items.length === 0) return false;
+          // Need at least 2 substantial items (30+ characters each)
+          const substantial = items.filter(item => item && item.trim().length >= 30);
+          return substantial.length >= 2;
+        }
+      },
+      { 
+        key: 'roles_responsibilities', 
+        check: (data) => {
+          const items = data.roles_responsibilities;
+          if (!Array.isArray(items) || items.length === 0) return false;
+          // Need at least 2 substantial items (30+ characters each)
+          const substantial = items.filter(item => item && item.trim().length >= 30);
+          return substantial.length >= 2;
+        }
+      },
+      { 
+        key: 'exceptions_special_cases', 
+        check: (data) => {
+          const items = data.exceptions_special_cases;
+          if (!Array.isArray(items) || items.length === 0) return false;
+          // Need at least 2 substantial items (30+ characters each)
+          const substantial = items.filter(item => item && item.trim().length >= 30);
+          return substantial.length >= 2;
+        }
+      }
     ];
 
     const completed = categories.filter(cat => cat.check(process)).length;
@@ -110,10 +192,10 @@ const ProcessCard = ({ process, onDelete }) => {
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity border border-transparent hover:border-red-500 hover:bg-transparent"
+                className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity border border-transparent hover:border-red-500 hover:bg-transparent group/delete"
                 disabled={isDeleting}
               >
-                <Trash2 className="h-4 w-4 text-foreground hover:text-red-500 transition-colors" />
+                <Trash2 className="h-4 w-4 text-foreground group-hover/delete:text-red-500 transition-colors" />
               </Button>
             </AlertDialogTrigger>
             <AlertDialogContent>

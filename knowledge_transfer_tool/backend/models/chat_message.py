@@ -1,6 +1,5 @@
 import uuid
 from sqlalchemy import Column, String, DateTime, ForeignKey, Text, JSON
-from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from .base import Base
@@ -8,8 +7,8 @@ from .base import Base
 class ChatMessage(Base):
     __tablename__ = "chat_messages"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    process_id = Column(UUID(as_uuid=True), ForeignKey("processes.id"), nullable=False)
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    process_id = Column(String, ForeignKey("processes.id"), nullable=False)
     
     sender_type = Column(String, nullable=False)  # e.g., 'user', 'ai', 'system'
     content = Column(Text, nullable=False)

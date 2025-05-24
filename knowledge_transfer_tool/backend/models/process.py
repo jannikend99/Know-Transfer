@@ -1,6 +1,5 @@
 import uuid
 from sqlalchemy import Column, String, DateTime, JSON, ForeignKey
-from sqlalchemy.dialects.postgresql import UUID # Even if using SQLite, good for compatibility/future
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from .base import Base
@@ -8,11 +7,12 @@ from .base import Base
 class Process(Base):
     __tablename__ = "processes"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     title = Column(String)
     general_description = Column(String)
     process_steps = Column(JSON)  # List[str]
-    scope = Column(String)
+    scope_included = Column(JSON)  # List[str]
+    scope_excluded = Column(JSON)  # List[str]
     inputs = Column(JSON)  # List[str]
     outputs = Column(JSON)  # List[str]
     kpis = Column(JSON)  # List[str]
