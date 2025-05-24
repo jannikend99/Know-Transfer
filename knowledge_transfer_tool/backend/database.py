@@ -6,7 +6,8 @@ import os
 # Fallback to os.environ.get for environments where .env is pre-loaded
 try:
     from dotenv import load_dotenv
-    load_dotenv(dotenv_path=os.path.join(os.path.dirname(os.path.dirname(__file__)), '.env'))
+    # Look for .env file in the root directory (three levels up from this file)
+    load_dotenv(dotenv_path=os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), '.env'))
 except ImportError:
     print("python-dotenv not installed, skipping .env file loading. Ensure environment variables are set.")
 
