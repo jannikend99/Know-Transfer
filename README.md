@@ -7,7 +7,7 @@ A comprehensive knowledge transfer application that combines document processing
 - **Document Processing**: Upload and process PDF, DOCX, PPTX, and Excel files
 - **AI-Powered Chat**: Interactive chat interface with document context
 - **Process Visualization**: Generate Mermaid diagrams and process checklists
-- **Voice Input**: Voice-to-text functionality for hands-free interaction
+- **Voice Input**: Voice-to-text functionality for hands-free interaction (requires HTTPS)
 - **Process Management**: Create, manage, and track knowledge transfer processes
 
 ## Architecture
@@ -107,18 +107,58 @@ From the project root directory (`Know-Transfer/`):
 ```bash
 # Ensure backend virtual environment is activated
 # Then run the application
+
+# For basic functionality (HTTP):
 python run.py
+
+# For voice input functionality (HTTPS required):
+python run.py --https
 ```
+
+**Available options:**
+- `--https`: Enable HTTPS with self-signed certificate (required for voice input)
+- `--port <number>`: Specify port (default: 8080)
+- `--host <address>`: Specify host (default: 0.0.0.0)
 
 The application will:
 1. Build the React frontend
 2. Copy static files to the backend
-3. Start the FastAPI server on port **8080**
+3. Start the FastAPI server on the specified port
 
 ### 6. Access the Application
 
-Open your browser and navigate to:
-**http://localhost:8080**
+**For basic functionality:**
+- **http://localhost:8080**
+
+**For voice input (HTTPS):**
+- **https://localhost:8080**
+- ⚠️ **Note**: You'll see a browser security warning for the self-signed certificate
+- Click "Advanced" → "Proceed to localhost (unsafe)" to continue
+
+## Audio Recording Setup
+
+Voice input requires HTTPS due to browser security restrictions. We provide two options:
+
+### Option 1: Auto-generate certificates (Recommended)
+```bash
+# Run with HTTPS - certificates will be auto-generated
+python run.py --https
+```
+
+### Option 2: Generate certificates manually
+```bash
+# Generate certificates first
+python generate_cert.py
+
+# Then run with HTTPS
+python run.py --https
+```
+
+**Requirements:**
+- OpenSSL must be installed on your system
+- **macOS**: `brew install openssl`
+- **Ubuntu/Debian**: `sudo apt install openssl`
+- **Windows**: Download from [OpenSSL website](https://slproweb.com/products/Win32OpenSSL.html)
 
 ## Development Workflow
 
