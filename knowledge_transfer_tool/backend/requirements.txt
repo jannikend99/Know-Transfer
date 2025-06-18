@@ -15,4 +15,8 @@ python-docx
 openpyxl
 pandas
 python-dotenv
-reportlab 
+reportlab
+# For generating images from Mermaid diagrams
+Pillow
+requests
+cairosvg 

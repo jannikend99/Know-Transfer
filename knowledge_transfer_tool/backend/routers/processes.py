@@ -5,10 +5,14 @@ import os
 import shutil
 from io import BytesIO
 from reportlab.lib.pagesizes import letter, A4
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak, Image
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
 from reportlab.lib import colors
+from reportlab.lib.enums import TA_CENTER, TA_LEFT
+from reportlab.platypus.flowables import HRFlowable
+from datetime import datetime
+import tempfile
 
 from langchain_core.messages import AIMessage, HumanMessage
 
@@ -27,6 +31,8 @@ from ..services.langchain_service import (
 from ..services.document_service import extract_text_from_file, SUPPORTED_MIME_TYPES
 
 router = APIRouter()
+
+
 
 @router.post("/processes", response_model=schemas.Process)
 def create_process(process: schemas.ProcessCreate, db: Session = Depends(get_db)):
@@ -471,7 +477,7 @@ async def regenerate_process_mermaid(process_id: str, db: Session = Depends(get_
 
 @router.get("/processes/{process_id}/export-pdf")
 async def export_process_to_pdf(process_id: str, db: Session = Depends(get_db)):
-    """Export process details to PDF format"""
+    """Export process details to PDF format with enhanced styling"""
     db_process = db.query(models.Process).filter(models.Process.id == process_id).first()
     if db_process is None:
         raise HTTPException(status_code=404, detail="Process not found")
@@ -480,96 +486,403 @@ async def export_process_to_pdf(process_id: str, db: Session = Depends(get_db)):
         # Create a buffer for the PDF
         buffer = BytesIO()
         
-        # Create the PDF document
-        doc = SimpleDocTemplate(buffer, pagesize=A4, 
-                              topMargin=72, bottomMargin=72,
-                              leftMargin=72, rightMargin=72)
+        # Create the PDF document with enhanced settings
+        doc = SimpleDocTemplate(
+            buffer, 
+            pagesize=A4,
+            topMargin=0.8*inch, 
+            bottomMargin=0.8*inch,
+            leftMargin=0.8*inch, 
+            rightMargin=0.8*inch,
+            title=db_process.title or "Process Documentation"
+        )
         
-        # Get styles
+        # Enhanced styles
         styles = getSampleStyleSheet()
-        title_style = ParagraphStyle('CustomTitle', parent=styles['Heading1'],
-                                   fontSize=24, spaceAfter=30, 
-                                   textColor=colors.HexColor('#1f2937'))
-        heading_style = ParagraphStyle('CustomHeading', parent=styles['Heading2'],
-                                     fontSize=16, spaceAfter=12, spaceBefore=20,
-                                     textColor=colors.HexColor('#374151'))
-        normal_style = styles['Normal']
+        
+        # Custom title style
+        title_style = ParagraphStyle(
+            'CustomTitle',
+            parent=styles['Heading1'],
+            fontSize=28,
+            spaceAfter=30,
+            spaceBefore=20,
+            textColor=colors.HexColor('#1e40af'),
+            alignment=TA_CENTER,
+            fontName='Helvetica-Bold'
+        )
+        
+        # Custom heading styles
+        heading_style = ParagraphStyle(
+            'CustomHeading',
+            parent=styles['Heading2'],
+            fontSize=18,
+            spaceAfter=15,
+            spaceBefore=25,
+            textColor=colors.HexColor('#1f2937'),
+            fontName='Helvetica-Bold',
+            borderWidth=1,
+            borderColor=colors.HexColor('#e5e7eb'),
+            borderPadding=8,
+            backColor=colors.HexColor('#f9fafb')
+        )
+        
+        # Custom subheading style
+        subheading_style = ParagraphStyle(
+            'CustomSubheading',
+            parent=styles['Heading3'],
+            fontSize=14,
+            spaceAfter=10,
+            spaceBefore=15,
+            textColor=colors.HexColor('#374151'),
+            fontName='Helvetica-Bold'
+        )
+        
+        # Enhanced normal text style
+        normal_style = ParagraphStyle(
+            'CustomNormal',
+            parent=styles['Normal'],
+            fontSize=11,
+            spaceAfter=8,
+            spaceBefore=4,
+            textColor=colors.HexColor('#1f2937'),
+            fontName='Helvetica',
+            leading=14,
+            leftIndent=12
+        )
+        
+        # Bullet point style
+        bullet_style = ParagraphStyle(
+            'CustomBullet',
+            parent=normal_style,
+            leftIndent=24,
+            bulletIndent=12,
+            spaceBefore=4,
+            spaceAfter=4
+        )
         
         # Content container
         content = []
         
-        # Title
-        title = db_process.title or "Untitled Process"
+        # Title page
+        title = db_process.title or "Process Documentation"
+        content.append(Spacer(1, 2*inch))
         content.append(Paragraph(title, title_style))
-        content.append(Spacer(1, 20))
+        content.append(Spacer(1, 0.5*inch))
         
-        # Overview
+        # Subtitle with process ID
+        subtitle_style = ParagraphStyle(
+            'Subtitle',
+            parent=styles['Normal'],
+            fontSize=14,
+            textColor=colors.HexColor('#6b7280'),
+            alignment=TA_CENTER,
+            fontName='Helvetica'
+        )
+        content.append(Paragraph(f"Process ID: {process_id}", subtitle_style))
+        content.append(Spacer(1, 0.3*inch))
+        
+        # Add a decorative line
+        content.append(HRFlowable(width="100%", thickness=2, color=colors.HexColor('#3b82f6')))
+        content.append(Spacer(1, 0.5*inch))
+        
+        # Generated date
+        date_style = ParagraphStyle(
+            'DateStyle',
+            parent=styles['Normal'],
+            fontSize=10,
+            textColor=colors.HexColor('#9ca3af'),
+            alignment=TA_CENTER,
+            fontName='Helvetica'
+        )
+        content.append(Paragraph(f"Generated on {datetime.now().strftime('%B %d, %Y at %H:%M')}", date_style))
+        
+        # Page break to start content
+        content.append(PageBreak())
+        
+        # Table of Contents
+        toc_style = ParagraphStyle(
+            'TOCStyle',
+            parent=styles['Normal'],
+            fontSize=12,
+            spaceBefore=8,
+            spaceAfter=8,
+            leftIndent=20,
+            fontName='Helvetica'
+        )
+        
+        content.append(Paragraph("Table of Contents", heading_style))
+        content.append(Spacer(1, 10))
+        
+        # Dynamic TOC based on available content
+        toc_items = []
+        section_num = 1
+        
         if db_process.general_description:
-            content.append(Paragraph("Overview", heading_style))
-            content.append(Paragraph(db_process.general_description, normal_style))
-            content.append(Spacer(1, 15))
-        
-        # Scope
+            toc_items.append(f"{section_num}. Overview")
+            section_num += 1
+            
+        if db_process.process_steps and len(db_process.process_steps) > 0:
+            toc_items.append(f"{section_num}. Process Flow Diagram")
+            section_num += 1
+            
         if db_process.scope_included or db_process.scope_excluded:
-            content.append(Paragraph("Scope", heading_style))
+            toc_items.append(f"{section_num}. Scope")
+            section_num += 1
+            
+        if db_process.process_steps and len(db_process.process_steps) > 0:
+            toc_items.append(f"{section_num}. Process Steps")
+            section_num += 1
+            
+        if (db_process.inputs and len(db_process.inputs) > 0) or (db_process.outputs and len(db_process.outputs) > 0):
+            toc_items.append(f"{section_num}. Inputs & Outputs")
+            section_num += 1
+            
+        if db_process.kpis and len(db_process.kpis) > 0:
+            toc_items.append(f"{section_num}. Key Performance Indicators")
+            section_num += 1
+            
+        if db_process.roles_responsibilities and len(db_process.roles_responsibilities) > 0:
+            toc_items.append(f"{section_num}. Roles & Responsibilities")
+            section_num += 1
+            
+        if db_process.exceptions_special_cases and len(db_process.exceptions_special_cases) > 0:
+            toc_items.append(f"{section_num}. Exception Handling")
+        
+        for item in toc_items:
+            content.append(Paragraph(item, toc_style))
+        
+        content.append(PageBreak())
+        
+        # Reset section counter
+        section_num = 1
+        
+        # 1. Overview Section
+        if db_process.general_description:
+            content.append(Paragraph(f"{section_num}. Overview", heading_style))
+            content.append(Spacer(1, 10))
+            section_num += 1
+            
+            # Create a styled box for the overview with proper text wrapping
+            overview_para = Paragraph(db_process.general_description, ParagraphStyle(
+                'OverviewStyle',
+                parent=normal_style,
+                fontSize=11,
+                leading=14,
+                leftIndent=0,
+                spaceBefore=6,
+                spaceAfter=6,
+                textColor=colors.HexColor('#1e40af')
+            ))
+            
+            overview_data = [[overview_para]]
+            overview_table = Table(overview_data, colWidths=[6.5*inch])
+            overview_table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#f0f9ff')),
+                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 15),
+                ('TOPPADDING', (0, 0), (-1, -1), 15),
+                ('LEFTPADDING', (0, 0), (-1, -1), 20),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 20),
+                ('GRID', (0, 0), (-1, -1), 1, colors.HexColor('#bfdbfe')),
+            ]))
+            content.append(overview_table)
+            content.append(Spacer(1, 20))
+        
+
+        
+        # 2. Scope Section
+        if db_process.scope_included or db_process.scope_excluded:
+            content.append(Paragraph(f"{section_num}. Scope", heading_style))
+            content.append(Spacer(1, 10))
+            section_num += 1
             
             if db_process.scope_included and len(db_process.scope_included) > 0:
-                content.append(Paragraph("Included:", normal_style))
+                content.append(Paragraph("What's Included:", subheading_style))
                 for item in db_process.scope_included:
-                    content.append(Paragraph(f"• {item}", normal_style))
+                    content.append(Paragraph(f"• {item}", bullet_style))
                 content.append(Spacer(1, 10))
             
             if db_process.scope_excluded and len(db_process.scope_excluded) > 0:
-                content.append(Paragraph("Excluded:", normal_style))
+                content.append(Paragraph("What's Excluded:", subheading_style))
                 for item in db_process.scope_excluded:
-                    content.append(Paragraph(f"• {item}", normal_style))
+                    content.append(Paragraph(f"• {item}", bullet_style))
+                content.append(Spacer(1, 10))
             
             content.append(Spacer(1, 15))
         
-        # Process Steps
+        # 3. Process Steps Section (Fixed formatting)
         if db_process.process_steps and len(db_process.process_steps) > 0:
-            content.append(Paragraph("Process Steps", heading_style))
+            content.append(Paragraph(f"{section_num}. Process Steps", heading_style))
+            content.append(Spacer(1, 10))
+            section_num += 1
+            
+            # Create a table for process steps with proper text wrapping
+            steps_data = [['Step', 'Description']]
             for i, step in enumerate(db_process.process_steps, 1):
-                content.append(Paragraph(f"{i}. {step}", normal_style))
-            content.append(Spacer(1, 15))
+                # Use Paragraph for description to enable text wrapping
+                description_para = Paragraph(step, ParagraphStyle(
+                    'StepDescription',
+                    parent=normal_style,
+                    fontSize=10,
+                    leading=12,
+                    leftIndent=0,
+                    spaceBefore=4,
+                    spaceAfter=4
+                ))
+                steps_data.append([str(i), description_para])
+            
+            steps_table = Table(steps_data, colWidths=[0.6*inch, 6.0*inch])
+            steps_table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#3b82f6')),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTNAME', (0, 1), (0, -1), 'Helvetica-Bold'),  # Step numbers
+                ('FONTSIZE', (0, 0), (-1, 0), 12),
+                ('FONTSIZE', (0, 1), (0, -1), 11),  # Step numbers
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 10),
+                ('TOPPADDING', (0, 0), (-1, -1), 10),
+                ('LEFTPADDING', (0, 0), (-1, -1), 8),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 8),
+                ('GRID', (0, 0), (-1, -1), 1, colors.HexColor('#e5e7eb')),
+                ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.HexColor('#f9fafb'), colors.white]),
+            ]))
+            content.append(steps_table)
+            content.append(Spacer(1, 20))
         
-        # Inputs
-        if db_process.inputs and len(db_process.inputs) > 0:
-            content.append(Paragraph("Inputs", heading_style))
-            for inp in db_process.inputs:
-                content.append(Paragraph(f"• {inp}", normal_style))
-            content.append(Spacer(1, 15))
+        # 4. Inputs & Outputs Section (Fixed formatting)
+        if (db_process.inputs and len(db_process.inputs) > 0) or (db_process.outputs and len(db_process.outputs) > 0):
+            content.append(Paragraph(f"{section_num}. Inputs & Outputs", heading_style))
+            content.append(Spacer(1, 10))
+            section_num += 1
+            
+            # Create separate tables for better formatting
+            if db_process.inputs and len(db_process.inputs) > 0:
+                content.append(Paragraph("Required Inputs:", subheading_style))
+                
+                inputs_data = [['Input']]
+                for inp in db_process.inputs:
+                    input_para = Paragraph(f"• {inp}", ParagraphStyle(
+                        'InputDescription',
+                        parent=normal_style,
+                        fontSize=10,
+                        leading=12,
+                        leftIndent=0,
+                        spaceBefore=3,
+                        spaceAfter=3
+                    ))
+                    inputs_data.append([input_para])
+                
+                inputs_table = Table(inputs_data, colWidths=[6.5*inch])
+                inputs_table.setStyle(TableStyle([
+                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#059669')),
+                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                    ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                    ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                    ('FONTSIZE', (0, 0), (-1, 0), 12),
+                    ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+                    ('TOPPADDING', (0, 0), (-1, -1), 8),
+                    ('LEFTPADDING', (0, 0), (-1, -1), 10),
+                    ('RIGHTPADDING', (0, 0), (-1, -1), 10),
+                    ('GRID', (0, 0), (-1, -1), 1, colors.HexColor('#e5e7eb')),
+                    ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.HexColor('#f0fdf4'), colors.white]),
+                ]))
+                content.append(inputs_table)
+                content.append(Spacer(1, 15))
+            
+            if db_process.outputs and len(db_process.outputs) > 0:
+                content.append(Paragraph("Expected Outputs:", subheading_style))
+                
+                outputs_data = [['Output']]
+                for output in db_process.outputs:
+                    output_para = Paragraph(f"• {output}", ParagraphStyle(
+                        'OutputDescription',
+                        parent=normal_style,
+                        fontSize=10,
+                        leading=12,
+                        leftIndent=0,
+                        spaceBefore=3,
+                        spaceAfter=3
+                    ))
+                    outputs_data.append([output_para])
+                
+                outputs_table = Table(outputs_data, colWidths=[6.5*inch])
+                outputs_table.setStyle(TableStyle([
+                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#059669')),
+                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                    ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                    ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                    ('FONTSIZE', (0, 0), (-1, 0), 12),
+                    ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+                    ('TOPPADDING', (0, 0), (-1, -1), 8),
+                    ('LEFTPADDING', (0, 0), (-1, -1), 10),
+                    ('RIGHTPADDING', (0, 0), (-1, -1), 10),
+                    ('GRID', (0, 0), (-1, -1), 1, colors.HexColor('#e5e7eb')),
+                    ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.HexColor('#f0fdf4'), colors.white]),
+                ]))
+                content.append(outputs_table)
+                content.append(Spacer(1, 20))
         
-        # Outputs
-        if db_process.outputs and len(db_process.outputs) > 0:
-            content.append(Paragraph("Outputs", heading_style))
-            for output in db_process.outputs:
-                content.append(Paragraph(f"• {output}", normal_style))
-            content.append(Spacer(1, 15))
-        
-        # KPIs
+        # 6. Key Performance Indicators Section
         if db_process.kpis and len(db_process.kpis) > 0:
-            content.append(Paragraph("Key Performance Indicators", heading_style))
-            for kpi in db_process.kpis:
-                content.append(Paragraph(f"• {kpi}", normal_style))
+            content.append(Paragraph(f"{section_num}. Key Performance Indicators", heading_style))
+            content.append(Spacer(1, 10))
+            section_num += 1
+            
+            for i, kpi in enumerate(db_process.kpis, 1):
+                content.append(Paragraph(f"{i}. {kpi}", normal_style))
             content.append(Spacer(1, 15))
         
-        # Roles & Responsibilities
+        # 7. Roles & Responsibilities Section
         if db_process.roles_responsibilities and len(db_process.roles_responsibilities) > 0:
-            content.append(Paragraph("Roles & Responsibilities", heading_style))
+            content.append(Paragraph(f"{section_num}. Roles & Responsibilities", heading_style))
+            content.append(Spacer(1, 10))
+            section_num += 1
+            
             for role in db_process.roles_responsibilities:
-                content.append(Paragraph(f"• {role}", normal_style))
+                content.append(Paragraph(f"• {role}", bullet_style))
             content.append(Spacer(1, 15))
         
-        # Exceptions & Special Cases
+        # 8. Exception Handling Section
         if db_process.exceptions_special_cases and len(db_process.exceptions_special_cases) > 0:
-            content.append(Paragraph("Exceptions & Special Cases", heading_style))
+            content.append(Paragraph(f"{section_num}. Exception Handling", heading_style))
+            content.append(Spacer(1, 10))
+            
             for exception in db_process.exceptions_special_cases:
-                content.append(Paragraph(f"• {exception}", normal_style))
+                content.append(Paragraph(f"• {exception}", bullet_style))
             content.append(Spacer(1, 15))
+        
+        # Footer with process info
+        content.append(Spacer(1, 30))
+        content.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor('#e5e7eb')))
+        content.append(Spacer(1, 10))
+        
+        footer_style = ParagraphStyle(
+            'FooterStyle',
+            parent=styles['Normal'],
+            fontSize=9,
+            textColor=colors.HexColor('#6b7280'),
+            alignment=TA_CENTER,
+            fontName='Helvetica'
+        )
+        content.append(Paragraph(f"Generated by Knowledge Transfer Tool | Process ID: {process_id}", footer_style))
         
         # Build the PDF
         doc.build(content)
+        
+        # Clean up temporary files after PDF is built
+        temp_files_to_cleanup = getattr(content, '_temp_files', [])
+        for temp_file in temp_files_to_cleanup:
+            try:
+                os.unlink(temp_file)
+                print(f"Cleaned up temporary file: {temp_file}")
+            except Exception as cleanup_error:
+                print(f"Could not clean up temporary file {temp_file}: {cleanup_error}")
         
         # Get the PDF content
         buffer.seek(0)
@@ -577,7 +890,7 @@ async def export_process_to_pdf(process_id: str, db: Session = Depends(get_db)):
         buffer.close()
         
         # Return the PDF as a response
-        filename = f"{title.replace(' ', '_')}.pdf"
+        filename = f"{title.replace(' ', '_').replace('/', '_')}_Process_Documentation.pdf"
         return Response(
             content=pdf_data,
             media_type="application/pdf",
@@ -585,7 +898,7 @@ async def export_process_to_pdf(process_id: str, db: Session = Depends(get_db)):
         )
         
     except Exception as e:
-        print(f"Error generating PDF: {type(e).__name__} - {e}")
+        print(f"Error generating enhanced PDF: {type(e).__name__} - {e}")
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Could not generate PDF: {str(e)}")

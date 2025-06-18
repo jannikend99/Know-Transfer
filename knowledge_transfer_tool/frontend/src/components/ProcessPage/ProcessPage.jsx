@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Home, BookOpen, Edit3, Check, X, Download } from 'lucide-react';
+import { Home, BookOpen, Edit3, Check, X, Download, FileText, Loader2 } from 'lucide-react';
 import ChatInterface from './ChatInterface/ChatInterface';
 import ProcessDetails from './ProcessVisualization/ProcessDetails';
 
@@ -29,6 +29,8 @@ const ProcessPage = () => {
   const [error, setError] = useState(null);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editedTitle, setEditedTitle] = useState('');
+  const [isDownloadingPDF, setIsDownloadingPDF] = useState(false);
+  const [downloadMessage, setDownloadMessage] = useState('');
 
   const fetchProcessDetails = async () => {
     if (!processId) return;
@@ -95,6 +97,9 @@ const ProcessPage = () => {
   };
 
   const handleDownloadPDF = async () => {
+    setIsDownloadingPDF(true);
+    setDownloadMessage('');
+    
     try {
       const response = await fetch(`/api/processes/${processId}/export-pdf`, {
         method: 'GET',
@@ -108,20 +113,28 @@ const ProcessPage = () => {
         // Create download link
         const link = document.createElement('a');
         link.href = url;
-        link.download = `${displayTitle || 'process'}.pdf`;
+        link.download = `${displayTitle.replace(/[^a-zA-Z0-9]/g, '_')}_Process_Documentation.pdf`;
         document.body.appendChild(link);
         link.click();
         
         // Cleanup
         document.body.removeChild(link);
         window.URL.revokeObjectURL(url);
+        
+        // Show success message
+        setDownloadMessage('PDF downloaded successfully!');
+        setTimeout(() => setDownloadMessage(''), 3000);
       } else {
         console.error('Failed to generate PDF');
-        // You could add a toast notification here
+        setDownloadMessage('Failed to generate PDF. Please try again.');
+        setTimeout(() => setDownloadMessage(''), 5000);
       }
     } catch (err) {
       console.error('Error downloading PDF:', err);
-      // You could add a toast notification here
+      setDownloadMessage('Error downloading PDF. Please check your connection.');
+      setTimeout(() => setDownloadMessage(''), 5000);
+    } finally {
+      setIsDownloadingPDF(false);
     }
   };
 
@@ -168,11 +181,17 @@ const ProcessPage = () => {
                 <div className="flex items-center space-x-3">
                   <Button
                     onClick={handleDownloadPDF}
-                    variant="outline"
-                    className="flex items-center space-x-2"
+                    disabled={isDownloadingPDF}
+                    className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white border-blue-600 hover:border-blue-700 transition-all duration-200 shadow-sm hover:shadow-md"
                   >
-                    <Download className="h-4 w-4" />
-                    <span>Download PDF</span>
+                    {isDownloadingPDF ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <FileText className="h-4 w-4" />
+                    )}
+                    <span>
+                      {isDownloadingPDF ? 'Generating PDF...' : 'Download PDF'}
+                    </span>
                   </Button>
                   <Button
                     onClick={handleGoHome}
@@ -274,11 +293,17 @@ const ProcessPage = () => {
               <div className="flex items-center space-x-3">
                 <Button
                   onClick={handleDownloadPDF}
-                  variant="outline"
-                  className="flex items-center space-x-2"
+                  disabled={isDownloadingPDF}
+                  className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white border-blue-600 hover:border-blue-700 transition-all duration-200 shadow-sm hover:shadow-md"
                 >
-                  <Download className="h-4 w-4" />
-                  <span>Download PDF</span>
+                  {isDownloadingPDF ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <FileText className="h-4 w-4" />
+                  )}
+                  <span>
+                    {isDownloadingPDF ? 'Generating PDF...' : 'Download PDF'}
+                  </span>
                 </Button>
                 <Button
                   onClick={handleGoHome}
@@ -292,6 +317,17 @@ const ProcessPage = () => {
             </div>
           </div>
         </CardHeader>
+
+        {/* Download notification */}
+        {downloadMessage && (
+          <div className="mx-6 mb-2">
+            <Alert className={`${downloadMessage.includes('successfully') ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'}`}>
+              <AlertDescription className={`${downloadMessage.includes('successfully') ? 'text-green-800' : 'text-red-800'}`}>
+                {downloadMessage}
+              </AlertDescription>
+            </Alert>
+          </div>
+        )}
 
         {/* Content section */}
         <CardContent className="flex-1 overflow-hidden pt-0">
