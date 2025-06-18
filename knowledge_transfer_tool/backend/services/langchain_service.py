@@ -342,12 +342,238 @@ async def query_document_store(query_text: str, process_id: str):
         print(f"Error querying document store: {e}")
         return f"Error during document query: {e}"
 
-# --- Basic HTML Visualization Placeholder ---
+# --- Mermaid Visualization Generation ---
+async def generate_mermaid_from_process_data(process_data: dict) -> str:
+    """Generate Mermaid diagram code from process data using AI."""
+    if not llm:
+        print("LLM not initialized, cannot generate Mermaid visualization.")
+        return generate_basic_mermaid_from_steps(process_data.get('process_steps', []))
+    
+    # Prepare process data for the prompt
+    process_context = f"""
+Process Title: {process_data.get('title', 'Untitled Process')}
+General Description: {process_data.get('general_description', 'No description available')}
+
+Process Steps:
+{chr(10).join([f"{i+1}. {step}" for i, step in enumerate(process_data.get('process_steps', []))])}
+
+Inputs: {', '.join(process_data.get('inputs', []))}
+Outputs: {', '.join(process_data.get('outputs', []))}
+
+Roles & Responsibilities:
+{chr(10).join(process_data.get('roles_responsibilities', []))}
+
+Exceptions & Special Cases:
+{chr(10).join(process_data.get('exceptions_special_cases', []))}
+    """
+    
+    mermaid_prompt = f"""You are an expert at creating Mermaid flowchart diagrams for business processes. 
+Create a comprehensive flowchart that shows the process with branches, decisions, and parallel paths where appropriate.
+
+CRITICAL REQUIREMENTS:
+1. Use 'graph TD' (top-down flowchart) format
+2. MUST show ALL process steps from the process steps list
+3. Analyze each step for branching patterns:
+   - DECISION POINTS: If step contains decision/choice language (if, when, decide, approve/reject, yes/no, check if, verify, condition), create diamond decision nodes
+   - PARALLEL PROCESSES: If step mentions simultaneous/parallel/concurrent activities, create parallel branches
+   - LINEAR FLOW: Connect regular steps sequentially
+4. Node types to use:
+   - Start(( START )) - for the beginning
+   - Step1["Step Description"] - for regular process steps 
+   - Decision1{{"Decision Question?"}} - for decision points (diamond shape)
+   - End(( END )) - for completion
+5. Decision branching:
+   - Decision1 -->|Yes| ActionYes["Yes Path"]
+   - Decision1 -->|No| ActionNo["No Path"]  
+   - Merge branches back: ActionYes --> Merge1(( ))
+6. Parallel processing:
+   - Split: Step1 --> Branch1["Task A"] and Step1 --> Branch2["Task B"]
+   - Merge: Branch1 --> Merge1(( )) and Branch2 --> Merge1(( ))
+7. Keep step labels clear but concise (max 50 characters per step)
+8. IMPORTANT: Clean all text - remove bullets, markdown, special characters that could break Mermaid
+
+TEXT CLEANING RULES:
+- Remove all bullet points (•, *, -, etc.)
+- Remove numbered list markers (1., 2., etc.)
+- Replace quotes with single quotes
+- Remove line breaks and replace with spaces
+- Replace brackets [], braces {{}}, and angle brackets <> with parentheses ()
+- Keep text simple and readable
+
+STYLING REQUIREMENTS:
+- Green for Start: style Start fill:#e8f5e8,stroke:#4caf50,stroke-width:2px
+- Blue for End: style End fill:#e3f2fd,stroke:#2196f3,stroke-width:2px  
+- Gray for process steps: style StepX fill:#f9f9f9,stroke:#666,stroke-width:1px
+- Yellow for decisions: style DecisionX fill:#fff3cd,stroke:#f59e0b,stroke-width:2px
+- Light blue for parallel tasks: style ParallelX fill:#e0f2fe,stroke:#0ea5e9,stroke-width:1px
+- Light green for Yes paths: style YesX fill:#d1fae5,stroke:#10b981,stroke-width:1px
+- Light red for No paths: style NoX fill:#fee2e2,stroke:#ef4444,stroke-width:1px
+- Gray dots for merge points: style MergeX fill:#f3f4f6,stroke:#6b7280,stroke-width:1px
+
+STRUCTURE EXAMPLE:
+```
+graph TD
+    Start(( START )) --> Step1
+    Step1["1. Review incoming request"] --> Step2
+    Step2["2. Validate requirements"] --> Step3
+    Step3["3. Process and approve"] --> End
+    End(( END ))
+    
+    style Start fill:#e8f5e8,stroke:#4caf50,stroke-width:2px
+    style End fill:#e3f2fd,stroke:#2196f3,stroke-width:2px
+    style Step1 fill:#f9f9f9,stroke:#666,stroke-width:1px
+    style Step2 fill:#f9f9f9,stroke:#666,stroke-width:1px
+    style Step3 fill:#f9f9f9,stroke:#666,stroke-width:1px
+```
+
+PROCESS DATA:
+{process_context}
+
+Focus primarily on the Process Steps section and create a clear sequential flow. Generate ONLY the Mermaid code:"""
+
+    try:
+        response_message = await llm.ainvoke([("user", mermaid_prompt)])
+        mermaid_code = response_message.content.strip()
+        
+        # Clean up the response to ensure it's valid Mermaid code
+        if not mermaid_code.startswith('graph'):
+            # Extract Mermaid code from response if it's wrapped in markdown or other text
+            lines = mermaid_code.split('\n')
+            start_idx = None
+            end_idx = None
+            
+            for i, line in enumerate(lines):
+                if line.strip().startswith('graph'):
+                    start_idx = i
+                elif start_idx is not None and (line.strip() == '' or line.strip().startswith('```')):
+                    end_idx = i
+                    break
+            
+            if start_idx is not None:
+                end_idx = end_idx or len(lines)
+                mermaid_code = '\n'.join(lines[start_idx:end_idx])
+        
+        return mermaid_code
+        
+    except Exception as e:
+        print(f"Error generating Mermaid visualization with AI: {e}")
+        # Fallback to basic generation
+        return generate_basic_mermaid_from_steps(process_data.get('process_steps', []))
+
+def clean_text_for_mermaid(text: str) -> str:
+    """Clean text to be safe for Mermaid node labels."""
+    if not text:
+        return ""
+    
+    import re
+    
+    print(f"[DEBUG] Cleaning text: {text[:100]}...")
+    
+    # Start with basic cleanup
+    clean_text = str(text).strip()
+    
+    # Remove HTML/XML tags
+    clean_text = re.sub(r'<[^>]+>', '', clean_text)
+    
+    # Remove markdown formatting aggressively
+    clean_text = re.sub(r'!\[.*?\]\(.*?\)', '', clean_text)  # Remove images
+    clean_text = re.sub(r'\[.*?\]\(.*?\)', '', clean_text)   # Remove links
+    clean_text = re.sub(r'\*\*(.+?)\*\*', r'\1', clean_text)  # Remove bold
+    clean_text = re.sub(r'\*(.+?)\*', r'\1', clean_text)      # Remove italic
+    clean_text = re.sub(r'`(.+?)`', r'\1', clean_text)        # Remove code
+    clean_text = re.sub(r'#{1,6}\s*', '', clean_text)         # Remove headers
+    
+    # Remove bullet points and list markers more aggressively
+    clean_text = re.sub(r'^[\s]*[-•*+]\s*', '', clean_text, flags=re.MULTILINE)
+    clean_text = re.sub(r'^[\s]*\d+\.\s*', '', clean_text, flags=re.MULTILINE)
+    clean_text = re.sub(r'^[\s]*[a-zA-Z]\.\s*', '', clean_text, flags=re.MULTILINE)
+    
+    # Remove problematic characters
+    clean_text = clean_text.replace('"', "'").replace('\n', ' ').replace('\r', ' ').replace('\t', ' ')
+    clean_text = clean_text.replace('[', '(').replace(']', ')')
+    clean_text = clean_text.replace('{', '(').replace('}', ')')
+    clean_text = clean_text.replace('<', '(').replace('>', ')')
+    clean_text = clean_text.replace('|', '-').replace('&', 'and')
+    clean_text = clean_text.replace(':', ' -').replace(';', ',')
+    
+    # Remove any remaining special characters that could break Mermaid
+    clean_text = re.sub(r'[^\w\s\-\.,()\']+', ' ', clean_text)
+    
+    # Remove multiple spaces and normalize
+    clean_text = re.sub(r'\s+', ' ', clean_text).strip()
+    
+    print(f"[DEBUG] Cleaned result: {clean_text[:100]}...")
+    
+    return clean_text
+
+def generate_basic_mermaid_from_steps(process_steps: list) -> str:
+    """Generate a basic Mermaid diagram from process steps."""
+    print(f"[DEBUG] generate_basic_mermaid_from_steps called with {len(process_steps) if process_steps else 0} steps")
+    if process_steps:
+        print(f"[DEBUG] First step example: {process_steps[0][:100] if process_steps[0] else 'None'}...")
+    
+    if not process_steps or len(process_steps) == 0:
+        return """graph TD
+    Start(( START )) --> NoSteps
+    NoSteps["No Process Steps Defined"] --> Helper
+    Helper["Use AI Assistant to add steps"] --> End
+    End(( END ))
+    
+    style Start fill:#e8f5e8,stroke:#4caf50,stroke-width:2px
+    style End fill:#e3f2fd,stroke:#2196f3,stroke-width:2px
+    style NoSteps fill:#fff3cd,stroke:#ffc107,stroke-width:2px
+    style Helper fill:#e3f2fd,stroke:#1976d2,stroke-width:2px"""
+    
+    mermaid_code = "graph TD\n"
+    
+    # Add start node and connect to first step
+    mermaid_code += "    Start(( START )) --> Step1\n"
+    
+    # Add all process steps with connections
+    for i, step in enumerate(process_steps):
+        step_id = f"Step{i + 1}"
+        print(f"[DEBUG] Processing step {i+1}: {step[:50]}...")
+        
+        # Clean and truncate step text
+        clean_step = clean_text_for_mermaid(step)
+        print(f"[DEBUG] Cleaned step {i+1}: {clean_step[:50]}...")
+        
+        if len(clean_step) > 60:
+            clean_step = clean_step[:57] + "..."
+        
+        # Ensure we have some text
+        if not clean_step:
+            clean_step = f"Process Step {i + 1}"
+        
+        # Add the step node
+        mermaid_code += f'    {step_id}["{i + 1}. {clean_step}"]\n'
+        
+        # Connect to next step or end
+        if i < len(process_steps) - 1:
+            next_step_id = f"Step{i + 2}"
+            mermaid_code += f"    {step_id} --> {next_step_id}\n"
+        else:
+            mermaid_code += f"    {step_id} --> End\n"
+    
+    # Add end node
+    mermaid_code += "    End(( END ))\n\n"
+    
+    # Add styling
+    mermaid_code += "    style Start fill:#e8f5e8,stroke:#4caf50,stroke-width:2px\n"
+    mermaid_code += "    style End fill:#e3f2fd,stroke:#2196f3,stroke-width:2px\n"
+    
+    # Style all process steps
+    for i in range(len(process_steps)):
+        step_id = f"Step{i + 1}"
+        mermaid_code += f"    style {step_id} fill:#f9f9f9,stroke:#666,stroke-width:1px\n"
+    
+    print(f"[DEBUG] Generated mermaid code: {mermaid_code[:200]}...")
+    return mermaid_code
+
+# --- Basic HTML Visualization Placeholder (Deprecated) ---
 async def generate_simple_html_visualization(process_data_text: str) -> str:
     """Takes text and wraps it in simple HTML for placeholder visualization."""
-    # In a real scenario, this would take structured process data (e.g., ProcessBase model)
-    # and use a more sophisticated method to generate meaningful HTML (e.g., using templates, libraries for diagrams).
-    # For now, just a very basic formatting.
+    # Deprecated - use generate_mermaid_from_process_data instead
     html_content = f"""<!DOCTYPE html>
 <html>
 <head>
@@ -361,7 +587,7 @@ async def generate_simple_html_visualization(process_data_text: str) -> str:
 </head>
 <body>
     <div class=\"process-box\">
-        <h2>Process Details (Placeholder Visualization)</h2>
+        <h2>Process Details (Deprecated - Use Mermaid)</h2>
         <pre>{process_data_text}</pre>
     </div>
 </body>

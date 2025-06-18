@@ -25,46 +25,11 @@ import {
 } from "../../ui/card";
 
 import { Badge } from "../../ui/badge";
-import VisualizationRenderer from './VisualizationRenderer';
+import MermaidVisualization from './MermaidVisualization';
 
 // This component will display process fields.
 // Editing functionality will be added later and will involve lifting state.
 const ProcessDetails = ({ processData }) => {
-  const [visualizationHtml, setVisualizationHtml] = React.useState('');
-  const [isLoadingViz, setIsLoadingViz] = React.useState(false);
-  const [vizError, setVizError] = React.useState(null);
-
-  // Fetch visualization data
-  React.useEffect(() => {
-    if (processData && processData.id) {
-      // Option 1: If processData directly contains the HTML for visualization_graph
-      if (processData.visualization_graph) {
-        setVisualizationHtml(processData.visualization_graph);
-        return; // HTML is already provided
-      }
-
-      // Option 2: Fetch from the /visualize endpoint if not directly in processData
-      const fetchVisualization = async () => {
-        setIsLoadingViz(true);
-        setVizError(null);
-        try {
-          const response = await fetch(`/api/processes/${processData.id}/visualize`);
-          if (!response.ok) {
-            throw new Error(`HTTP error fetching visualization! status: ${response.status}`);
-          }
-          const htmlText = await response.text();
-          setVisualizationHtml(htmlText);
-        } catch (err) {
-          console.error("Failed to fetch visualization:", err);
-          setVizError(err.message || 'Could not load visualization.');
-          setVisualizationHtml('<p style="color:red;">Could not load visualization.</p>');
-        } finally {
-          setIsLoadingViz(false);
-        }
-      };
-      fetchVisualization();
-    }
-  }, [processData]); // Re-fetch if processData changes
 
   // Calculate completion status
   const getProcessCompletion = () => {
@@ -284,54 +249,27 @@ const ProcessDetails = ({ processData }) => {
     </Card>
   );
 
-  const renderProcessSteps = () => {
-    const steps = processData.process_steps;
+  // Handler for recreating visualization
+  const handleRecreateVisualization = async () => {
+    if (!processData || !processData.id) return;
     
-    return (
-      <Card className="shadow-sm">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-lg flex items-center space-x-2">
-            <Layers className="h-5 w-5 text-primary" />
-            <span>Process Steps</span>
-            {Array.isArray(steps) && steps.length > 0 && (
-              <Badge variant="secondary" className="ml-auto">
-                {steps.length} steps
-              </Badge>
-            )}
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="pt-0">
-          {Array.isArray(steps) && steps.length > 0 ? (
-            <div className="space-y-0">
-              {steps.map((step, index) => (
-                <div key={index}>
-                  <div className="flex items-start space-x-3">
-                    <div className="flex flex-col items-center">
-                      <div className="flex items-center justify-center w-6 h-6 bg-primary text-primary-foreground rounded-full text-xs font-semibold flex-shrink-0">
-                        {index + 1}
-                      </div>
-                      {index < steps.length - 1 && (
-                        <div className="flex items-center justify-center w-6 h-8">
-                          <ArrowDown className="h-4 w-4 text-muted-foreground" />
-                        </div>
-                      )}
-                    </div>
-                    <div className="flex-1 pb-6">
-                      <p className="text-sm">{step}</p>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="flex items-center space-x-2 text-muted-foreground">
-              <Circle className="h-4 w-4" />
-              <span className="text-sm">No steps defined yet</span>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-    );
+    try {
+      const response = await fetch(`/api/processes/${processData.id}/generate-mermaid`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to generate new visualization');
+      }
+      
+      return true; // Success
+    } catch (error) {
+      console.error('Error recreating visualization:', error);
+      throw error;
+    }
   };
 
   const renderProgressTracker = () => (
@@ -424,36 +362,7 @@ const ProcessDetails = ({ processData }) => {
     </Card>
   );
 
-  const renderVisualizationCard = () => (
-    <Card className="shadow-sm">
-      <CardHeader className="pb-3">
-        <CardTitle className="text-lg flex items-center space-x-2">
-          <Network className="h-5 w-5 text-primary" />
-          <span>Process Visualization</span>
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="p-0 pb-0">
-        {isLoadingViz && (
-          <div className="flex items-center justify-center h-32 p-4">
-            <div className="text-center">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2"></div>
-              <p className="text-sm text-muted-foreground">Loading visualization...</p>
-            </div>
-          </div>
-        )}
-        {vizError && (
-          <div className="flex items-center justify-center h-32 p-4">
-            <p className="text-sm text-destructive">Error: {vizError}</p>
-          </div>
-        )}
-        {!isLoadingViz && !vizError && (
-          <div className="min-h-96">
-            <VisualizationRenderer htmlContent={visualizationHtml} noContainer={true} />
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
+
 
   return (
     <div className="space-y-6" style={{ marginRight: '-17px', paddingRight: '17px' }}>
@@ -523,8 +432,11 @@ const ProcessDetails = ({ processData }) => {
         </Card>
       </div>
 
-      {/* Process Steps */}
-      {renderProcessSteps()}
+      {/* Process Flow Visualization */}
+      <MermaidVisualization 
+        processData={processData} 
+        onRecreateVisualization={handleRecreateVisualization}
+      />
 
       {/* Inputs and Outputs */}
       <div className="grid gap-6">
@@ -540,9 +452,6 @@ const ProcessDetails = ({ processData }) => {
 
       {/* Exceptions */}
       {renderSection("Exceptions & Special Cases", processData.exceptions_special_cases, AlertTriangle, "No exceptions defined")}
-
-      {/* Visualization */}
-      {renderVisualizationCard()}
     </div>
   );
 };

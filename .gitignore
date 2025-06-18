@@ -9,6 +9,14 @@ knowledge_transfer.db
 .DS_Store
 .vscode
 todo.txt
+*.chunk.js
+*.chunk.js.map
+*.chunk.css
+*.chunk.css.map
+*.chunk.js.map
+*.chunk.css.map
+
+
 
 
 

@@ -3,7 +3,8 @@ from .langchain_service import (
     get_basic_chat_chain, run_basic_chat_chain, 
     get_process_extraction_chain, extract_process_from_text,
     add_text_to_vector_store, query_document_store, get_vector_store,
-    generate_simple_html_visualization
+    generate_simple_html_visualization, generate_mermaid_from_process_data,
+    generate_basic_mermaid_from_steps
 )
 from .document_service import extract_text_from_file
 # Import other service functions as they are created
@@ -20,5 +21,7 @@ __all__ = [
     "add_text_to_vector_store",
     "query_document_store",
     "get_vector_store",
-    "generate_simple_html_visualization"
+    "generate_simple_html_visualization",
+    "generate_mermaid_from_process_data",
+    "generate_basic_mermaid_from_steps"
 ] 

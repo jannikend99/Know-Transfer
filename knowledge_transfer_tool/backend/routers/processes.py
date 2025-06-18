@@ -20,7 +20,9 @@ from ..services.langchain_service import (
     extract_process_from_text,
     add_text_to_vector_store, # Added
     query_document_store,      # Added
-    generate_simple_html_visualization
+    generate_simple_html_visualization,
+    generate_mermaid_from_process_data,
+    generate_basic_mermaid_from_steps
 )
 from ..services.document_service import extract_text_from_file, SUPPORTED_MIME_TYPES
 
@@ -388,6 +390,84 @@ async def get_process_visualization(process_id: str, db: Session = Depends(get_d
     html_content = await generate_simple_html_visualization(process_data_text)
     
     return Response(content=html_content, media_type="text/html")
+
+@router.get("/processes/{process_id}/mermaid", response_class=Response)
+async def get_process_mermaid(process_id: str, db: Session = Depends(get_db)):
+    """Get Mermaid diagram code for a process."""
+    db_process = db.query(models.Process).filter(models.Process.id == process_id).first()
+    if db_process is None:
+        raise HTTPException(status_code=404, detail="Process not found")
+
+    try:
+        # Convert DB model to dict for the mermaid generator
+        process_data = {
+            'title': db_process.title,
+            'general_description': db_process.general_description,
+            'process_steps': db_process.process_steps or [],
+            'scope_included': db_process.scope_included or [],
+            'scope_excluded': db_process.scope_excluded or [],
+            'inputs': db_process.inputs or [],
+            'outputs': db_process.outputs or [],
+            'kpis': db_process.kpis or [],
+            'roles_responsibilities': db_process.roles_responsibilities or [],
+            'exceptions_special_cases': db_process.exceptions_special_cases or []
+        }
+        
+        # Check if we have a cached mermaid code in the database
+        if hasattr(db_process, 'mermaid_diagram') and db_process.mermaid_diagram:
+            mermaid_code = db_process.mermaid_diagram
+        else:
+            # Generate new mermaid code
+            mermaid_code = await generate_mermaid_from_process_data(process_data)
+            
+            # Cache it in the database if we have a field for it
+            # Note: You might want to add a mermaid_diagram field to the Process model
+            # db_process.mermaid_diagram = mermaid_code
+            # db.commit()
+        
+        return Response(content=mermaid_code, media_type="text/plain")
+        
+    except Exception as e:
+        print(f"Error generating Mermaid visualization: {e}")
+        # Fallback to basic generation
+        fallback_mermaid = generate_basic_mermaid_from_steps(db_process.process_steps or [])
+        return Response(content=fallback_mermaid, media_type="text/plain")
+
+@router.post("/processes/{process_id}/generate-mermaid")
+async def regenerate_process_mermaid(process_id: str, db: Session = Depends(get_db)):
+    """Regenerate Mermaid diagram for a process using AI."""
+    db_process = db.query(models.Process).filter(models.Process.id == process_id).first()
+    if db_process is None:
+        raise HTTPException(status_code=404, detail="Process not found")
+
+    try:
+        # Convert DB model to dict for the mermaid generator
+        process_data = {
+            'title': db_process.title,
+            'general_description': db_process.general_description,
+            'process_steps': db_process.process_steps or [],
+            'scope_included': db_process.scope_included or [],
+            'scope_excluded': db_process.scope_excluded or [],
+            'inputs': db_process.inputs or [],
+            'outputs': db_process.outputs or [],
+            'kpis': db_process.kpis or [],
+            'roles_responsibilities': db_process.roles_responsibilities or [],
+            'exceptions_special_cases': db_process.exceptions_special_cases or []
+        }
+        
+        # Force regeneration with AI
+        mermaid_code = await generate_mermaid_from_process_data(process_data)
+        
+        # Cache the new diagram in the database if we have a field for it
+        # Note: You might want to add a mermaid_diagram field to the Process model
+        # db_process.mermaid_diagram = mermaid_code
+        # db.commit()
+        
+        return {"success": True, "message": "Mermaid diagram regenerated successfully"}
+        
+    except Exception as e:
+        print(f"Error regenerating Mermaid visualization: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to regenerate visualization: {str(e)}")
 
 @router.get("/processes/{process_id}/export-pdf")
 async def export_process_to_pdf(process_id: str, db: Session = Depends(get_db)):
