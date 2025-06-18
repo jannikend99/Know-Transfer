@@ -1,95 +1,287 @@
-# Knowledge Transfer Tool - Prototype Setup
+# Knowledge Transfer Tool
 
-This guide provides instructions to set up and run the Knowledge Transfer Tool prototype.
+A comprehensive knowledge transfer application that combines document processing, AI-powered chat, and process visualization to facilitate knowledge sharing and documentation.
+
+## Features
+
+- **Document Processing**: Upload and process PDF, DOCX, PPTX, and Excel files
+- **AI-Powered Chat**: Interactive chat interface with document context
+- **Process Visualization**: Generate Mermaid diagrams and process checklists
+- **Voice Input**: Voice-to-text functionality for hands-free interaction
+- **Process Management**: Create, manage, and track knowledge transfer processes
+
+## Architecture
+
+- **Frontend**: React.js with Tailwind CSS and shadcn/ui components
+- **Backend**: FastAPI with SQLAlchemy ORM
+- **Database**: SQLite (development) / PostgreSQL (production)
+- **AI Integration**: OpenAI GPT models via LangChain
+- **Vector Storage**: ChromaDB for document embeddings
 
 ## Prerequisites
 
-*   **Python** (version 3.8 or higher recommended)
-*   **Node.js** (version 16 or higher recommended) and **npm**
-*   Access to a shell or terminal
+- **Python 3.8+** (Python 3.9+ recommended)
+- **Node.js 16+** and **npm** (Node.js 18+ recommended)
+- **OpenAI API Key** (required for AI features)
+- **Git** (for cloning the repository)
 
-## Setup Instructions
+## Quick Start
 
-1.  **Clone the Repository (if applicable)**
-    If you've received this as a set of files, ensure they are all within a main project directory (e.g., `knowledge_transfer_tool`).
+### 1. Clone the Repository
 
-2.  **Create the `.env` File:**
-    In the root directory of the project (`knowledge_transfer_tool/`), create a file named `.env` and add the following content. Replace `your_openai_api_key` with your actual OpenAI API key if you plan to test AI features later (it's not strictly needed for the initial frontend display).
+```bash
+git clone <repository-url>
+cd Know-Transfer
+```
 
-    ```env
-    DATABASE_URL=sqlite:///./knowledge_transfer.db
-    UPLOAD_DIRECTORY=./uploads
-    VECTOR_STORE_PATH=./vector_store
-    OPENAI_API_KEY=your_openai_api_key
-    ```
+### 2. Environment Configuration
 
-3.  **Set Up Backend:**
-    *   Navigate to the backend directory:
-        ```bash
-        cd backend
-        ```
-    *   **Create a Virtual Environment (recommended):**
-        ```bash
-        python -m venv venv
-        ```
-    *   **Activate the Virtual Environment:**
-        *   On macOS/Linux:
-            ```bash
-            source venv/bin/activate
-            ```
-        *   On Windows:
-            ```bash
-            .\venv\Scripts\activate
-            ```
-    *   **Install Backend Dependencies:**
-        ```bash
-        pip install -r requirements.txt
-        ```
-    *   Navigate back to the project root:
-        ```bash
-        cd ..
-        ```
+Create a `.env` file in the `knowledge_transfer_tool/` directory:
 
-4.  **Set Up Frontend:**
-    *   Navigate to the frontend directory:
-        ```bash
-        cd frontend
-        ```
-    *   **Install Frontend Dependencies:**
-        ```bash
-        npm install
-        ```
-    *   Navigate back to the project root:
-        ```bash
-        cd ..
-        ```
+```bash
+cd knowledge_transfer_tool
+```
 
-5.  **Make Build Script Executable (if not already):**
-    The `run.py` script attempts to do this, but it's good to ensure manually if needed.
-    *   On macOS/Linux:
-        ```bash
-        chmod +x frontend/build.sh
-        ```
-    *   On Windows, shell scripts might require WSL or Git Bash to run correctly. If `build.sh` doesn't run via `run.py`, you might need to execute its steps manually or adapt it to a `.bat` script. The `build.sh` script essentially runs `npm run build` in the `frontend` directory and then copies the contents of `frontend/build/` to `backend/static/`, and also copies CSS files from `frontend/src/styles/` to `backend/static/styles/`.
+Create `.env` file with the following content:
 
-## Running the Application
+```env
+# Database Configuration
+DATABASE_URL=sqlite:///./knowledge_transfer.db
 
-1.  **Ensure you are in the project's root directory (`knowledge_transfer_tool/`).**
-2.  **If you created a backend virtual environment, make sure it's activated.**
-3.  **Run the `run.py` script:**
-    ```bash
-    python run.py
-    ```
-    This script will:
-    *   Attempt to build the frontend (by executing `frontend/build.sh`).
-    *   Start the FastAPI backend server.
+# File Upload Configuration
+UPLOAD_DIRECTORY=./uploads
+VECTOR_STORE_PATH=./vector_store
 
-4.  **Access the Application:**
-    Open your web browser and go to: `http://localhost:8000`
+# OpenAI Configuration (Required)
+OPENAI_API_KEY=your_openai_api_key_here
 
-You should see the basic header and a welcome message for the Home Page.
+# Optional: Custom Settings
+MAX_FILE_SIZE_MB=50
+SUPPORTED_FILE_TYPES=pdf,docx,pptx,xlsx
+```
 
-## Stopping the Application
+**⚠️ Important**: Replace `your_openai_api_key_here` with your actual OpenAI API key. Get one at [https://platform.openai.com/api-keys](https://platform.openai.com/api-keys)
 
-*   Press `Ctrl+C` in the terminal where `run.py` is running.
-*   If you used a virtual environment, you can deactivate it by typing `deactivate` in the terminal.
+### 3. Backend Setup
+
+```bash
+# Navigate to backend directory
+cd backend
+
+# Create and activate virtual environment
+python -m venv venv
+
+# Activate virtual environment
+# On macOS/Linux:
+source venv/bin/activate
+# On Windows:
+# .\venv\Scripts\activate
+
+# Install Python dependencies
+pip install -r requirements.txt
+
+# Return to project root
+cd ..
+```
+
+### 4. Frontend Setup
+
+```bash
+# Navigate to frontend directory
+cd frontend
+
+# Install Node.js dependencies
+npm install
+
+# Make build script executable (macOS/Linux only)
+chmod +x build.sh
+
+# Return to project root
+cd ..
+```
+
+### 5. Run the Application
+
+From the project root directory (`Know-Transfer/`):
+
+```bash
+# Ensure backend virtual environment is activated
+# Then run the application
+python run.py
+```
+
+The application will:
+1. Build the React frontend
+2. Copy static files to the backend
+3. Start the FastAPI server on port **8080**
+
+### 6. Access the Application
+
+Open your browser and navigate to:
+**http://localhost:8080**
+
+## Development Workflow
+
+### Backend Development
+
+```bash
+cd knowledge_transfer_tool/backend
+
+# Activate virtual environment
+source venv/bin/activate  # or .\venv\Scripts\activate on Windows
+
+# Run backend only (for API development)
+uvicorn main:app --reload --host 0.0.0.0 --port 8080
+```
+
+### Frontend Development
+
+```bash
+cd knowledge_transfer_tool/frontend
+
+# Start development server
+npm start
+```
+
+The React development server runs on `http://localhost:3000` and proxies API calls to the backend.
+
+### Building for Production
+
+```bash
+# From frontend directory
+./build.sh
+
+# Or manually:
+npm run build
+```
+
+## Project Structure
+
+```
+Know-Transfer/
+├── run.py                          # Main application launcher
+├── knowledge_transfer_tool/
+│   ├── backend/                    # FastAPI backend
+│   │   ├── main.py                 # FastAPI app entry point
+│   │   ├── database.py             # Database configuration
+│   │   ├── models/                 # SQLAlchemy models
+│   │   ├── routers/                # API route handlers
+│   │   ├── schemas/                # Pydantic schemas
+│   │   ├── services/               # Business logic services
+│   │   ├── static/                 # Built frontend files (auto-generated)
+│   │   └── requirements.txt        # Python dependencies
+│   └── frontend/                   # React frontend
+│       ├── src/
+│       │   ├── components/         # React components
+│       │   ├── styles/             # CSS stylesheets
+│       │   └── lib/                # Utility functions
+│       ├── public/                 # Static assets
+│       ├── package.json            # Node.js dependencies
+│       └── build.sh                # Frontend build script
+└── README.md                       # This file
+```
+
+## API Documentation
+
+Once the application is running, visit:
+- **Interactive API Docs**: http://localhost:8080/docs
+- **ReDoc**: http://localhost:8080/redoc
+
+## Key Dependencies
+
+### Backend
+- **FastAPI**: Modern, fast web framework for building APIs
+- **SQLAlchemy**: Python SQL toolkit and ORM
+- **LangChain**: Framework for developing LLM applications
+- **ChromaDB**: Vector database for embeddings
+- **OpenAI**: AI model integration
+- **Uvicorn**: ASGI server for FastAPI
+
+### Frontend
+- **React**: JavaScript library for building user interfaces
+- **Tailwind CSS**: Utility-first CSS framework
+- **shadcn/ui**: High-quality React components
+- **Mermaid**: Diagramming and charting library
+- **React Router**: Client-side routing
+
+## Troubleshooting
+
+### Common Issues
+
+#### 1. Port Already in Use
+If port 8080 is already in use, you can change it in `run.py`:
+```python
+# Change the port number in run.py
+["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8081"]
+```
+
+#### 2. OpenAI API Key Issues
+- Ensure your API key is valid and has sufficient credits
+- Check that the `.env` file is in the correct location (`knowledge_transfer_tool/.env`)
+- Verify no extra spaces or quotes around the API key
+
+#### 3. Build Script Permission Denied (macOS/Linux)
+```bash
+chmod +x knowledge_transfer_tool/frontend/build.sh
+```
+
+#### 4. Python Virtual Environment Issues
+```bash
+# Ensure you're in the correct directory
+cd knowledge_transfer_tool/backend
+
+# Create fresh virtual environment
+rm -rf venv
+python -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+```
+
+#### 5. Node.js Module Issues
+```bash
+# Clear npm cache and reinstall
+cd knowledge_transfer_tool/frontend
+rm -rf node_modules package-lock.json
+npm install
+```
+
+### Windows-Specific Notes
+
+- Use `.\venv\Scripts\activate` instead of `source venv/bin/activate`
+- The build script (`build.sh`) requires WSL, Git Bash, or similar Unix-like environment
+- Alternatively, run the build commands manually:
+  ```cmd
+  cd knowledge_transfer_tool\frontend
+  npm run build
+  xcopy /E /I build ..\backend\static
+  ```
+
+## Production Deployment
+
+For production deployment:
+
+1. Use PostgreSQL instead of SQLite
+2. Set proper environment variables
+3. Configure reverse proxy (nginx/Apache)
+4. Use process manager (PM2, systemd)
+5. Enable HTTPS/SSL
+6. Set up proper logging and monitoring
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add tests if applicable
+5. Submit a pull request
+
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## Support
+
+For issues and questions:
+1. Check the troubleshooting section above
+2. Search existing GitHub issues
+3. Create a new issue with detailed description and logs

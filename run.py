@@ -37,7 +37,7 @@ def main():
     # Running from project_root and using 'backend.main:app' should handle this if
     # the virtual environment (which has uvicorn) is activated.
     subprocess.run(
-        ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"],
+        ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8080"],
         cwd=project_root,  # Run Uvicorn from the knowledge_transfer_tool directory
         check=True
     )
