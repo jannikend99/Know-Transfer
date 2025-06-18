@@ -41,7 +41,8 @@ certs/
 *.db
 *.sqlite
 *.sqlite3
-knowledge_transfer.db
+*.db
+
 
 # Upload and data directories
 uploads/
