@@ -45,8 +45,8 @@ certs/
 
 
 # Upload and data directories
-uploads/
-vector_store/
+#uploads/
+#vector_store/
 data/
 
 # IDE and editor files
