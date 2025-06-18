@@ -93,6 +93,3 @@ You should see the basic header and a welcome message for the Home Page.
 
 *   Press `Ctrl+C` in the terminal where `run.py` is running.
 *   If you used a virtual environment, you can deactivate it by typing `deactivate` in the terminal.
-
-## Next Steps in Development
-Refer to the `todo.txt` file for the ongoing development tasks. 
