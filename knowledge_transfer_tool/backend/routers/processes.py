@@ -430,9 +430,20 @@ async def export_process_to_pdf(process_id: str, db: Session = Depends(get_db)):
             content.append(Spacer(1, 15))
         
         # Scope
-        if db_process.scope:
+        if db_process.scope_included or db_process.scope_excluded:
             content.append(Paragraph("Scope", heading_style))
-            content.append(Paragraph(db_process.scope, normal_style))
+            
+            if db_process.scope_included and len(db_process.scope_included) > 0:
+                content.append(Paragraph("Included:", normal_style))
+                for item in db_process.scope_included:
+                    content.append(Paragraph(f"• {item}", normal_style))
+                content.append(Spacer(1, 10))
+            
+            if db_process.scope_excluded and len(db_process.scope_excluded) > 0:
+                content.append(Paragraph("Excluded:", normal_style))
+                for item in db_process.scope_excluded:
+                    content.append(Paragraph(f"• {item}", normal_style))
+            
             content.append(Spacer(1, 15))
         
         # Process Steps
