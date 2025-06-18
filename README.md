@@ -295,33 +295,3 @@ npm install
   npm run build
   xcopy /E /I build ..\backend\static
   ```
-
-## Production Deployment
-
-For production deployment:
-
-1. Use PostgreSQL instead of SQLite
-2. Set proper environment variables
-3. Configure reverse proxy (nginx/Apache)
-4. Use process manager (PM2, systemd)
-5. Enable HTTPS/SSL
-6. Set up proper logging and monitoring
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests if applicable
-5. Submit a pull request
-
-## License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-## Support
-
-For issues and questions:
-1. Check the troubleshooting section above
-2. Search existing GitHub issues
-3. Create a new issue with detailed description and logs
