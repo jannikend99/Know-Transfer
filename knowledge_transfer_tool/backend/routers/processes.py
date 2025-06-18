@@ -121,9 +121,21 @@ async def upload_file_for_process(process_id: str, file: UploadFile = File(...),
             print(f"Processing audio file: {file.filename}")
             transcript_text = await transcribe_audio_with_whisper(file_location)
             if transcript_text and not transcript_text.startswith("Error"):
+                # Update the user message with the actual transcription instead of the filename
+                db_upload_msg.content = transcript_text
+                db.commit()
+                db.refresh(db_upload_msg)
+                print(f"Updated user message with transcription: '{transcript_text[:50]}...' for process {process_id}")
+                
                 text_content_for_vector_store = transcript_text
                 ai_response_text = f"**Great!** I've transcribed your voice message and found some good process information. \n\nWhat **specific steps** are involved in this process?"
             elif transcript_text: # Error in transcription
+                # Update the user message to show the error instead of the filename
+                db_upload_msg.content = f"Voice message transcription failed: {transcript_text}"
+                db.commit()
+                db.refresh(db_upload_msg)
+                print(f"Updated user message with transcription error for process {process_id}")
+                
                 ai_response_text = f"I had trouble with that audio file. Could you try **recording again** or just tell me about your process in text?"
 
         elif file.content_type in SUPPORTED_MIME_TYPES:
