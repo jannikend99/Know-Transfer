@@ -1,20 +1,82 @@
-/.env
-/.venv
-/todo.txt
-node_modules
-__pycache__
-uploads
-vector_store
-knowledge_transfer.db
-.DS_Store
-.vscode
-todo.txt
+# Environment files
+.env
+.venv
+venv/
+env/
+
+# Dependencies
+node_modules/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Build outputs and generated files
+build/
+dist/
 *.chunk.js
 *.chunk.js.map
 *.chunk.css
 *.chunk.css.map
-*.chunk.js.map
-*.chunk.css.map
+static/css/main.*.css
+static/css/main.*.css.map
+static/js/main.*.js
+static/js/main.*.js.LICENSE.txt
+static/js/main.*.js.map
+
+# Cache directories
+.cache/
+*.cache
+.eslintcache
+
+# Certificates and security files
+certs/
+*.pem
+*.key
+*.crt
+*.cert
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+knowledge_transfer.db
+
+# Upload and data directories
+uploads/
+vector_store/
+data/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Todo and temporary files
+todo.txt
+temp/
+tmp/
+
+# Frontend specific
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
 
 
