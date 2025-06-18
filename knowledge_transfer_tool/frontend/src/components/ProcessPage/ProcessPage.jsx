@@ -182,7 +182,8 @@ const ProcessPage = () => {
                   <Button
                     onClick={handleDownloadPDF}
                     disabled={isDownloadingPDF}
-                    className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white border-blue-600 hover:border-blue-700 transition-all duration-200 shadow-sm hover:shadow-md"
+                    variant="outline"
+                    className="flex items-center space-x-2"
                   >
                     {isDownloadingPDF ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
@@ -294,7 +295,8 @@ const ProcessPage = () => {
                 <Button
                   onClick={handleDownloadPDF}
                   disabled={isDownloadingPDF}
-                  className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white border-blue-600 hover:border-blue-700 transition-all duration-200 shadow-sm hover:shadow-md"
+                  variant="outline"
+                  className="flex items-center space-x-2"
                 >
                   {isDownloadingPDF ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -344,14 +346,14 @@ const ProcessPage = () => {
             {/* Right Side - Process Details & Visualization - 2/3 width */}
             <div className="w-2/3 min-w-0 h-full">
               <div 
-                className="h-full overflow-auto" 
+                className="h-full overflow-y-auto overflow-x-hidden" 
                 style={{ 
                   overscrollBehavior: 'contain',
                   touchAction: 'pan-y',
                   scrollbarGutter: 'stable'
                 }}
               >
-                <div className="space-y-6">
+                <div className="space-y-6 min-w-0">
                   <ProcessDetails processData={processData} />
                 </div>
               </div>

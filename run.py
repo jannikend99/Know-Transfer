@@ -1,7 +1,15 @@
 import subprocess
 import os
+import sys
+import argparse
 
 def main():
+    parser = argparse.ArgumentParser(description='Run the Knowledge Transfer Tool')
+    parser.add_argument('--https', action='store_true', help='Run with HTTPS (required for audio recording)')
+    parser.add_argument('--port', type=int, default=8080, help='Port to run the server on (default: 8080)')
+    parser.add_argument('--host', default='0.0.0.0', help='Host to bind to (default: 0.0.0.0)')
+    args = parser.parse_args()
+
     print("Building frontend...")
     # Determine the correct path to the frontend directory
     # Since run.py is now in the root directory, we need to go into knowledge_transfer_tool
@@ -30,17 +38,67 @@ def main():
     print("Frontend built successfully.")
 
     print("Starting backend server with Uvicorn...")
-    # Use the knowledge_transfer_tool directory as the root for the backend
-    # Run Uvicorn from the knowledge_transfer_tool directory, pointing to the app instance within the backend package
-    # The command becomes: uvicorn backend.main:app --host 0.0.0.0 --port 8000
-    # We need to ensure that the 'backend' directory is in Python's path.
-    # Running from project_root and using 'backend.main:app' should handle this if
-    # the virtual environment (which has uvicorn) is activated.
-    subprocess.run(
-        ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8080"],
-        cwd=project_root,  # Run Uvicorn from the knowledge_transfer_tool directory
-        check=True
-    )
+    
+    # Prepare the uvicorn command
+    uvicorn_cmd = [
+        "uvicorn", 
+        "backend.main:app", 
+        "--host", args.host, 
+        "--port", str(args.port),
+        "--reload"  # Enable auto-reload for development
+    ]
+    
+    if args.https:
+        # For HTTPS in development, we'll use self-signed certificates
+        # Note: This will generate browser warnings, but it's needed for microphone access
+        print("Running with HTTPS (self-signed certificate)...")
+        print("Note: Your browser will show a security warning. Click 'Advanced' and 'Proceed' to continue.")
+        print("This is necessary for audio recording functionality.")
+        
+        # Generate self-signed certificate if it doesn't exist
+        cert_dir = os.path.join(project_root, "certs")
+        cert_file = os.path.join(cert_dir, "cert.pem")
+        key_file = os.path.join(cert_dir, "key.pem")
+        
+        if not os.path.exists(cert_file) or not os.path.exists(key_file):
+            print("Generating self-signed certificate...")
+            os.makedirs(cert_dir, exist_ok=True)
+            
+            # Generate self-signed certificate using openssl
+            subprocess.run([
+                "openssl", "req", "-x509", "-newkey", "rsa:4096", "-nodes",
+                "-out", cert_file, "-keyout", key_file, "-days", "365",
+                "-subj", "/C=US/ST=State/L=City/O=Organization/CN=localhost"
+            ], check=True)
+            print("Self-signed certificate generated.")
+        
+        uvicorn_cmd.extend(["--ssl-keyfile", key_file, "--ssl-certfile", cert_file])
+        
+        protocol = "https"
+    else:
+        protocol = "http"
+        print("\n" + "="*60)
+        print("⚠️  IMPORTANT: Audio recording requires HTTPS!")
+        print("If you plan to use voice input, run with --https flag:")
+        print(f"python run.py --https")
+        print("="*60 + "\n")
+    
+    # Print access information
+    print(f"\n🚀 Server starting at {protocol}://{args.host}:{args.port}")
+    if args.host == '0.0.0.0':
+        print(f"   Local access: {protocol}://localhost:{args.port}")
+        print(f"   Network access: {protocol}://127.0.0.1:{args.port}")
+    
+    # Run Uvicorn from the knowledge_transfer_tool directory
+    try:
+        subprocess.run(uvicorn_cmd, cwd=project_root, check=True)
+    except KeyboardInterrupt:
+        print("\nServer stopped by user.")
+    except subprocess.CalledProcessError as e:
+        print(f"Server failed to start: {e}")
+        if args.https and "openssl" in str(e):
+            print("OpenSSL is required for HTTPS. Please install it or run without --https flag.")
+        sys.exit(1)
 
 if __name__ == "__main__":
     main() 

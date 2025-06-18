@@ -22,6 +22,8 @@ const ChatInterface = ({ processId: propProcessId, processData, onProcessDataUpd
   const [error, setError] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState('');
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingMessageId, setRecordingMessageId] = useState(null);
 
   // Helper function to fetch and update chat history
   const fetchChatHistory = async () => {
@@ -109,7 +111,17 @@ const ChatInterface = ({ processId: propProcessId, processData, onProcessDataUpd
         timestamp: new Date()
       };
       setMessages(prev => [...prev, optimisticUserMessage]);
-    } else if (messageData.type === 'voice' || messageData.type === 'document') {
+    } else if (messageData.type === 'voice') {
+      // For voice messages, show a processing message initially
+      optimisticUserMessage = {
+        id: `user-optimistic-${Date.now()}`,
+        text: 'Processing voice message...',
+        type: 'user',
+        timestamp: new Date(),
+        isProcessing: true
+      };
+      setMessages(prev => [...prev, optimisticUserMessage]);
+    } else if (messageData.type === 'document') {
       optimisticUserMessage = {
         id: `user-optimistic-${Date.now()}`,
         text: `Uploaded: ${messageData.name}`,
@@ -152,8 +164,57 @@ const ChatInterface = ({ processId: propProcessId, processData, onProcessDataUpd
           onProcessDataUpdate();
         }
         
-      } else if (messageData.type === 'voice' || messageData.type === 'document') {
-        // Send file to backend (processing happens in background)
+      } else if (messageData.type === 'voice') {
+        // Send voice file to backend
+        const formData = new FormData();
+        formData.append('file', messageData.content, messageData.name);
+
+        response = await fetch(`/api/processes/${processId}/upload-file`, {
+          method: 'POST',
+          body: formData 
+        });
+        
+        if (!response.ok) {
+          const errData = await response.json().catch(() => ({ detail: "Unknown error during voice upload." }));
+          throw new Error(errData.detail || `Voice upload API error! Status: ${response.status}`);
+        }
+        
+        responseBody = await response.json();
+        
+        // Update the processing message with the actual transcription
+        if (responseBody.transcript && optimisticUserMessage) {
+          setMessages(prev => prev.map(msg => 
+            msg.id === optimisticUserMessage.id 
+              ? { ...msg, text: responseBody.transcript, isProcessing: false }
+              : msg
+          ));
+        } else if (optimisticUserMessage) {
+          // If no transcript, show error message
+          setMessages(prev => prev.map(msg => 
+            msg.id === optimisticUserMessage.id 
+              ? { ...msg, text: 'Voice message could not be transcribed', isProcessing: false }
+              : msg
+          ));
+        }
+        
+        // Add AI response when processing is complete
+        if (responseBody.ai_response) {
+          const aiMessage = {
+            id: `ai-${Date.now()}`,
+            text: responseBody.ai_response,
+            type: 'ai',
+            timestamp: new Date()
+          };
+          setMessages(prev => [...prev, aiMessage]);
+        }
+        
+        // If voice upload led to process data changes, trigger parent update
+        if (responseBody.extracted_process_data && onProcessDataUpdate) {
+          onProcessDataUpdate();
+        }
+        
+      } else if (messageData.type === 'document') {
+        // Send document file to backend (processing happens in background)
         const formData = new FormData();
         formData.append('file', messageData.content, messageData.name);
 
@@ -218,6 +279,29 @@ const ChatInterface = ({ processId: propProcessId, processData, onProcessDataUpd
     }
   };
 
+  const handleRecordingStateChange = (recording) => {
+    setIsRecording(recording);
+    
+    if (recording) {
+      // Show "Recording..." message when recording starts
+      const recordingMessage = {
+        id: `recording-${Date.now()}`,
+        text: 'Recording...',
+        type: 'user',
+        timestamp: new Date(),
+        isRecording: true
+      };
+      setMessages(prev => [...prev, recordingMessage]);
+      setRecordingMessageId(recordingMessage.id);
+    } else {
+      // Remove "Recording..." message when recording stops
+      if (recordingMessageId) {
+        setMessages(prev => prev.filter(msg => msg.id !== recordingMessageId));
+        setRecordingMessageId(null);
+      }
+    }
+  };
+
   return (
     <Card className="h-full flex flex-col shadow-sm">
       {/* Chat History */}
@@ -245,7 +329,11 @@ const ChatInterface = ({ processId: propProcessId, processData, onProcessDataUpd
                 className="flex-1 pr-32"
               />
               <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
-                <VoiceInput onSendVoice={handleSendMessage} disabled={isSending || !processId} />
+                <VoiceInput 
+                  onSendVoice={handleSendMessage} 
+                  onRecordingStateChange={handleRecordingStateChange}
+                  disabled={isSending || !processId} 
+                />
                 <DocumentUpload onSendDocument={handleSendMessage} disabled={isSending || !processId} />
                 <Button 
                   type="submit" 

@@ -53,6 +53,127 @@ a:hover {
   text-decoration: underline;
 }
 
+/* Custom Scrollbar Styling */
+/* Webkit browsers (Chrome, Safari, Edge) */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+  border-radius: 0;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 3px;
+  border: none;
+  transition: background 0.3s ease;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.4);
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
+}
+
+/* Auto-hide scrollbar for all elements */
+* {
+  /* For Webkit browsers - make scrollbar overlay style */
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Prevent horizontal overflow globally */
+* {
+  box-sizing: border-box;
+}
+
+/* Ensure all containers respect their bounds */
+.overflow-x-hidden {
+  overflow-x: hidden !important;
+}
+
+/* Force word wrapping for long content */
+.break-words {
+  word-wrap: break-word;
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
+
+/* Prevent grid overflow */
+.grid {
+  min-width: 0;
+}
+
+.grid > * {
+  min-width: 0;
+}
+
+/* Specific styling for chat areas */
+.chat-scroll-container {
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
+  /* Enable overlay scrollbars on macOS */
+  -webkit-overflow-scrolling: touch;
+  /* Hide scrollbar on systems that support it */
+  scrollbar-gutter: stable;
+}
+
+/* Auto-hide scrollbar - only show on hover or while scrolling */
+.chat-scroll-container::-webkit-scrollbar {
+  width: 6px;
+  background: transparent;
+}
+
+.chat-scroll-container::-webkit-scrollbar-track {
+  background: transparent;
+  border: none;
+}
+
+.chat-scroll-container::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 3px;
+  border: none;
+  opacity: 0;
+  transition: opacity 0.3s ease, background 0.3s ease;
+}
+
+/* Show scrollbar on hover */
+.chat-scroll-container:hover::-webkit-scrollbar-thumb {
+  opacity: 1;
+}
+
+/* Show scrollbar while scrolling */
+.chat-scroll-container.scrolling::-webkit-scrollbar-thumb {
+  opacity: 1;
+}
+
+.chat-scroll-container::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+/* For systems that support overlay scrollbars (macOS) */
+@supports (-webkit-overflow-scrolling: touch) {
+  .chat-scroll-container {
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  .chat-scroll-container::-webkit-scrollbar {
+    width: 0px;
+    background: transparent;
+  }
+}
+
 /* Utility classes (examples) */
 .container {
   width: 90%;

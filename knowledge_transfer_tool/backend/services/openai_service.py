@@ -45,21 +45,49 @@ async def get_simple_chat_completion(user_prompt: str, system_prompt: str = "You
         # For now, returning an error message string
         return f"Error communicating with OpenAI: {str(e)}"
 
-# Placeholder for Whisper transcription
+# Whisper transcription with improved error handling
 async def transcribe_audio_with_whisper(audio_file_path: str, model="whisper-1"):
     current_client = get_openai_client()
     if not current_client:
         return "OpenAI client is not initialized."
     
+    # Check if file exists and has content
+    if not os.path.exists(audio_file_path):
+        return "Error: Audio file not found."
+    
+    file_size = os.path.getsize(audio_file_path)
+    if file_size == 0:
+        return "Error: Audio file is empty."
+    
+    if file_size > 25 * 1024 * 1024:  # 25MB limit for Whisper
+        return "Error: Audio file is too large (maximum 25MB)."
+    
     try:
+        # Get file extension to provide better error messages
+        file_ext = os.path.splitext(audio_file_path)[1].lower()
+        print(f"Transcribing audio file: {audio_file_path} (size: {file_size} bytes, type: {file_ext})")
+        
         with open(audio_file_path, "rb") as audio_file:
             transcript = current_client.audio.transcriptions.create(
                 model=model,
-                file=audio_file
+                file=audio_file,
+                response_format="text"
             )
-        return transcript.text
+        return transcript
+        
     except Exception as e:
+        error_msg = str(e)
         print(f"Error during Whisper transcription: {e}")
-        return f"Error transcribing audio: {str(e)}"
+        
+        # Provide more helpful error messages based on the error type
+        if "file format" in error_msg.lower() or "unsupported" in error_msg.lower():
+            supported_formats = "mp3, mp4, mpeg, mpga, m4a, wav, webm"
+            return f"Error: Unsupported audio format. Please use one of: {supported_formats}"
+        elif "file too large" in error_msg.lower():
+            return "Error: Audio file is too large. Please record a shorter message."
+        elif "quota" in error_msg.lower() or "billing" in error_msg.lower():
+            return "Error: OpenAI API quota exceeded. Please check your account."
+        else:
+            return f"Error transcribing audio: {error_msg}"
 
 # Add other OpenAI related functions (e.g., for embeddings) here as needed 

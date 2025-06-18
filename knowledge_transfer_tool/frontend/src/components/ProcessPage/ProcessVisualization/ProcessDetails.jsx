@@ -193,7 +193,7 @@ const ProcessDetails = ({ processData }) => {
         </CardHeader>
         <CardContent className="pt-0">
           {Array.isArray(kpis) && kpis.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 min-w-0">
               {kpis.map((kpi, index) => (
                 <div key={index} className="flex items-center space-x-3 p-3 bg-muted/30 rounded-lg border">
                   <div className="flex items-center justify-center w-8 h-8 bg-primary/10 rounded-full">
@@ -365,12 +365,12 @@ const ProcessDetails = ({ processData }) => {
 
 
   return (
-    <div className="space-y-6" style={{ marginRight: '-17px', paddingRight: '17px' }}>
+    <div className="space-y-6 min-w-0 overflow-x-hidden" style={{ marginRight: '-17px', paddingRight: '17px' }}>
       {/* Progress Tracker */}
       {renderProgressTracker()}
 
       {/* Overview and Scope Grid */}
-      <div className="grid grid-cols-2 gap-6 items-stretch">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch min-w-0">
         {/* Overview */}
         <Card className="shadow-sm h-full">
           <CardHeader className="pb-3">
@@ -380,7 +380,7 @@ const ProcessDetails = ({ processData }) => {
             </CardTitle>
           </CardHeader>
           <CardContent className="pt-0">
-            <p className="text-sm leading-relaxed text-muted-foreground">
+            <p className="text-sm leading-relaxed text-muted-foreground break-words">
               {processData.general_description || 'No description provided yet.'}
             </p>
           </CardContent>
@@ -432,14 +432,8 @@ const ProcessDetails = ({ processData }) => {
         </Card>
       </div>
 
-      {/* Process Flow Visualization */}
-      <MermaidVisualization 
-        processData={processData} 
-        onRecreateVisualization={handleRecreateVisualization}
-      />
-
       {/* Inputs and Outputs */}
-      <div className="grid gap-6">
+      <div className="grid gap-6 min-w-0">
         {renderSection("Inputs", processData.inputs, ArrowLeft, "No inputs defined")}
         {renderSection("Outputs", processData.outputs, ArrowRight, "No outputs defined")}
       </div>
@@ -452,6 +446,12 @@ const ProcessDetails = ({ processData }) => {
 
       {/* Exceptions */}
       {renderSection("Exceptions & Special Cases", processData.exceptions_special_cases, AlertTriangle, "No exceptions defined")}
+
+      {/* Process Flow Visualization - Moved to bottom */}
+      <MermaidVisualization 
+        processData={processData} 
+        onRecreateVisualization={handleRecreateVisualization}
+      />
     </div>
   );
 };
