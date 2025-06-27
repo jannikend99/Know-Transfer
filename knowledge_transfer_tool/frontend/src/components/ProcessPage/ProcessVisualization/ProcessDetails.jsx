@@ -64,16 +64,30 @@ const renderKPIWithFormatting = (text) => {
       
       return (
         <div className="space-y-1">
-          <div><strong>{name}</strong></div>
-          <div className="text-sm text-muted-foreground">{description}</div>
-          <div className="text-sm italic">Target: {targetValue}</div>
+          <div className="text-sm font-semibold">{name}</div>
+          <div className="text-xs text-muted-foreground">{description}</div>
+          <div className="text-xs italic text-muted-foreground">Target: {targetValue}</div>
         </div>
       );
     }
   }
   
-  // Fallback to regular name:description formatting
-  return renderWithFormatting(text);
+  // Handle simple "Name: Description" format with consistent KPI styling
+  const colonIndex = text.indexOf(':');
+  if (colonIndex > 0 && colonIndex < text.length - 1) {
+    const name = text.substring(0, colonIndex).trim();
+    const description = text.substring(colonIndex + 1).trim();
+    
+    return (
+      <div className="space-y-1">
+        <div className="text-sm font-semibold">{name}</div>
+        <div className="text-xs text-muted-foreground">{description}</div>
+      </div>
+    );
+  }
+  
+  // Fallback for plain text - wrap in consistent styling
+  return <div className="text-sm">{text}</div>;
 };
 
 // This component will display process fields.
