@@ -19,6 +19,7 @@ class Process(Base):
     roles_responsibilities = Column(JSON)  # List[str]
     exceptions_special_cases = Column(JSON)  # List[str]
     visualization_graph = Column(String)  # HTML code
+    reactflow_data = Column(JSON)  # React Flow nodes and edges data
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

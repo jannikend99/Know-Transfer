@@ -25,7 +25,7 @@ import {
 } from "../../ui/card";
 
 import { Badge } from "../../ui/badge";
-import MermaidVisualization from './MermaidVisualization';
+import ReactFlowVisualization from './ReactFlowVisualization';
 
 // Helper function to format text with "Name: Description" pattern
 const renderWithFormatting = (text) => {
@@ -317,7 +317,7 @@ const ProcessDetails = ({ processData }) => {
     if (!processData || !processData.id) return;
     
     try {
-      const response = await fetch(`/api/processes/${processData.id}/generate-mermaid`, {
+      const response = await fetch(`/api/processes/${processData.id}/generate-reactflow`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -511,7 +511,7 @@ const ProcessDetails = ({ processData }) => {
       {renderSection("Exceptions & Special Cases", processData.exceptions_special_cases, AlertTriangle, "No exceptions defined")}
 
       {/* Process Flow Visualization - Moved to bottom */}
-      <MermaidVisualization 
+      <ReactFlowVisualization 
         processData={processData} 
         onRecreateVisualization={handleRecreateVisualization}
       />

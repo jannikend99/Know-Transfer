@@ -26,7 +26,9 @@ from ..services.langchain_service import (
     query_document_store,      # Added
     generate_simple_html_visualization,
     generate_mermaid_from_process_data,
-    generate_basic_mermaid_from_steps
+    generate_basic_mermaid_from_steps,
+    generate_reactflow_from_process_data,
+    generate_basic_reactflow_from_steps
 )
 from ..services.document_service import extract_text_from_file, SUPPORTED_MIME_TYPES
 
@@ -67,8 +69,18 @@ def update_process(process_id: str, process: schemas.ProcessUpdate, db: Session 
     
     try:
         update_data = process.dict(exclude_unset=True)
+        
+        # Check if process_steps or other structure-related fields are being updated
+        structure_fields = ['process_steps', 'scope_included', 'scope_excluded', 'inputs', 'outputs', 'roles_responsibilities', 'exceptions_special_cases']
+        structure_updated = any(field in update_data for field in structure_fields)
+        
         for key, value in update_data.items():
             setattr(db_process, key, value)
+        
+        # Clear cached React Flow data if structure changed
+        if structure_updated:
+            print(f"Process structure updated, clearing cached React Flow data for process {process_id}")
+            db_process.reactflow_data = None
         
         db.add(db_process)
         db.commit()
@@ -495,6 +507,92 @@ async def regenerate_process_mermaid(process_id: str, db: Session = Depends(get_
         
     except Exception as e:
         print(f"Error regenerating Mermaid visualization: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to regenerate visualization: {str(e)}")
+
+@router.get("/processes/{process_id}/reactflow")
+async def get_process_reactflow(process_id: str, db: Session = Depends(get_db)):
+    """Get React Flow diagram data (nodes and edges) for a process."""
+    db_process = db.query(models.Process).filter(models.Process.id == process_id).first()
+    if db_process is None:
+        raise HTTPException(status_code=404, detail="Process not found")
+
+    try:
+        # Check if we have cached React Flow data in the database
+        if db_process.reactflow_data:
+            print(f"Returning cached React Flow data for process {process_id}")
+            return db_process.reactflow_data
+        
+        # Convert DB model to dict for the React Flow generator
+        process_data = {
+            'title': db_process.title,
+            'general_description': db_process.general_description,
+            'process_steps': db_process.process_steps or [],
+            'scope_included': db_process.scope_included or [],
+            'scope_excluded': db_process.scope_excluded or [],
+            'inputs': db_process.inputs or [],
+            'outputs': db_process.outputs or [],
+            'kpis': db_process.kpis or [],
+            'roles_responsibilities': db_process.roles_responsibilities or [],
+            'exceptions_special_cases': db_process.exceptions_special_cases or []
+        }
+        
+        # Generate new React Flow data
+        print(f"Generating new React Flow data for process {process_id}")
+        reactflow_data = await generate_reactflow_from_process_data(process_data)
+        
+        # Save it to the database
+        db_process.reactflow_data = reactflow_data
+        db.commit()
+        print(f"Cached React Flow data for process {process_id}")
+        
+        return reactflow_data
+        
+    except Exception as e:
+        print(f"Error generating React Flow visualization: {e}")
+        # Fallback to basic generation
+        fallback_reactflow = generate_basic_reactflow_from_steps(db_process.process_steps or [])
+        
+        # Save fallback to database
+        db_process.reactflow_data = fallback_reactflow
+        db.commit()
+        
+        return fallback_reactflow
+
+@router.post("/processes/{process_id}/generate-reactflow")
+async def regenerate_process_reactflow(process_id: str, db: Session = Depends(get_db)):
+    """Regenerate React Flow diagram for a process using AI."""
+    db_process = db.query(models.Process).filter(models.Process.id == process_id).first()
+    if db_process is None:
+        raise HTTPException(status_code=404, detail="Process not found")
+
+    try:
+        # Convert DB model to dict for the React Flow generator
+        process_data = {
+            'title': db_process.title,
+            'general_description': db_process.general_description,
+            'process_steps': db_process.process_steps or [],
+            'scope_included': db_process.scope_included or [],
+            'scope_excluded': db_process.scope_excluded or [],
+            'inputs': db_process.inputs or [],
+            'outputs': db_process.outputs or [],
+            'kpis': db_process.kpis or [],
+            'roles_responsibilities': db_process.roles_responsibilities or [],
+            'exceptions_special_cases': db_process.exceptions_special_cases or []
+        }
+        
+        # Force regeneration with AI
+        print(f"Force regenerating React Flow data for process {process_id}")
+        reactflow_data = await generate_reactflow_from_process_data(process_data)
+        
+        # Save the new diagram to the database
+        db_process.reactflow_data = reactflow_data
+        db.commit()
+        print(f"Updated cached React Flow data for process {process_id}")
+        
+        return {"success": True, "message": "React Flow diagram regenerated successfully", "data": reactflow_data}
+        
+    except Exception as e:
+        print(f"Error regenerating React Flow visualization: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to regenerate visualization: {str(e)}")
 
 @router.get("/processes/{process_id}/export-pdf")

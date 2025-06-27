@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from datetime import datetime
 
 class ProcessBase(BaseModel):
@@ -41,6 +41,10 @@ class ProcessBase(BaseModel):
         description="Exceptions and special cases: max 10 items, each describing error scenarios, alternative paths, or special handling situations"
     )
     visualization_graph: Optional[str] = None
+    reactflow_data: Optional[Dict[str, Any]] = Field(
+        None,
+        description="React Flow visualization data containing nodes and edges"
+    )
 
 class ProcessCreate(ProcessBase):
     general_description: str # Required for creation

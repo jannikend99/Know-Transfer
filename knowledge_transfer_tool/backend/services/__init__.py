@@ -4,7 +4,9 @@ from .langchain_service import (
     get_process_extraction_chain, extract_process_from_text,
     add_text_to_vector_store, query_document_store, get_vector_store,
     generate_simple_html_visualization, generate_mermaid_from_process_data,
-    generate_basic_mermaid_from_steps
+    generate_basic_mermaid_from_steps,
+    generate_reactflow_from_process_data,
+    generate_basic_reactflow_from_steps
 )
 from .document_service import extract_text_from_file
 # Import other service functions as they are created
@@ -23,5 +25,7 @@ __all__ = [
     "get_vector_store",
     "generate_simple_html_visualization",
     "generate_mermaid_from_process_data",
-    "generate_basic_mermaid_from_steps"
+    "generate_basic_mermaid_from_steps",
+    "generate_reactflow_from_process_data",
+    "generate_basic_reactflow_from_steps"
 ] 
