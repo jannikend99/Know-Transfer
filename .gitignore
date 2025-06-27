@@ -84,3 +84,16 @@ yarn-error.log*
 
 
 
+# Node.js cache files
+node_modules/.cache/
+**/node_modules/.cache/
+*.pack
+
+# Additional large files to ignore
+**/*.pack
+
+# Data directories - not needed in git
+knowledge_transfer_tool/uploads/
+knowledge_transfer_tool/vector_store/
+uploads/
+vector_store/
