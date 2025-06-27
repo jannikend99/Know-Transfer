@@ -792,18 +792,27 @@ CRITICAL REQUIREMENTS:
    - Each edge needs: id, source, target, type, markerEnd, style (optional)
    - For loop edges, add: style: {{"stroke": "#f59e0b", "strokeDasharray": "5,5"}}, label: "Rework"
 
-5. Use 10-column grid layout for maximum organization:
-   - Column 1 (x: 80): Far left - Extra branches
-   - Column 2 (x: 250): Left-2 - Secondary branches  
-   - Column 3 (x: 420): Left-1 - Yes paths, Parallel Task A
-   - Column 4 (x: 590): Left-Center - Merge points
-   - Column 5 (x: 760): CENTER - Main flow (START, steps, decisions, END)
-   - Column 6 (x: 930): Right-Center - Merge points
-   - Column 7 (x: 1100): Right-1 - No paths, Parallel Task B
-   - Column 8 (x: 1270): Right-2 - Secondary branches
-   - Column 9 (x: 1440): Right-3 - Alternative paths
-   - Column 10 (x: 1610): Far right - Early termination ends
-   - Space rows 180px apart vertically for clean layout
+5. Use 10-column grid layout with maximum spacing for crystal-clear organization:
+   - Column 1 (x: 50): Far left - Extra branches
+   - Column 2 (x: 300): Left-2 - Secondary branches  
+   - Column 3 (x: 550): Left-1 - Yes paths, Parallel Task A
+   - Column 4 (x: 800): Left-Center - Merge points
+   - Column 5 (x: 1050): CENTER - Main flow (START, steps, decisions, END)
+   - Column 6 (x: 1300): Right-Center - Merge points
+   - Column 7 (x: 1550): Right-1 - No paths, Parallel Task B
+   - Column 8 (x: 1800): Right-2 - Secondary branches
+   - Column 9 (x: 2050): Right-3 - Alternative paths
+   - Column 10 (x: 2300): Far right - Early termination ends
+   - Space rows 250px apart vertically for maximum clarity and readability
+
+6. Enhanced Node Descriptions: Include detailed descriptions with step context and process guidance:
+   - START nodes: "START" with initiation guidance
+   - Process steps: "Step X" with detailed execution context
+   - Decision points: Clear decision labels with evaluation criteria
+   - Parallel nodes: "Parallel" with synchronization details
+   - Yes paths: "Yes - Approved" with continuation context
+   - No paths: "No - Alternative" with alternative handling
+   - END nodes: "END" with completion verification
 
 6. Enhanced Decision Examples:
    - "If quality check passes" → Standard decision with merge
@@ -819,32 +828,32 @@ EXAMPLE ENHANCED STRUCTURE:
     {{
       "id": "start",
       "type": "startEnd", 
-      "position": {{"x": 760, "y": 100}},
-      "data": {{"label": "START", "isStart": true}}
+      "position": {{"x": 1050, "y": 120}},
+      "data": {{"label": "START", "description": "Process Initiation Point", "isStart": true}}
     }},
     {{
       "id": "step-1", 
       "type": "decision",
-      "position": {{"x": 760, "y": 280}},
-      "data": {{"label": "Quality check passes?", "stepNumber": 1}}
+      "position": {{"x": 1050, "y": 370}},
+      "data": {{"label": "Quality check passes?", "description": "Critical decision point for quality validation", "stepNumber": 1}}
     }},
     {{
       "id": "step-1-yes",
       "type": "process",
-      "position": {{"x": 420, "y": 460}},
-      "data": {{"label": "Yes - Continue", "isConditionResult": true}}
+      "position": {{"x": 550, "y": 620}},
+      "data": {{"label": "Yes - Approved", "description": "Quality standards met, continue process", "isConditionResult": true}}
     }},
     {{
       "id": "step-1-no-rework",
       "type": "process", 
-      "position": {{"x": 1100, "y": 460}},
-      "data": {{"label": "No - Rework Required", "isLoop": true}}
+      "position": {{"x": 1550, "y": 620}},
+      "data": {{"label": "No - Rework Required", "description": "Quality standards not met, rework needed", "isLoop": true}}
     }},
     {{
       "id": "step-1-merge",
       "type": "process",
-      "position": {{"x": 760, "y": 640}},
-      "data": {{"label": "Continue Process", "isMerge": true}}
+      "position": {{"x": 1050, "y": 870}},
+      "data": {{"label": "Continue Process", "description": "Paths converge here", "isMerge": true}}
     }}
   ],
   "edges": [
@@ -1002,23 +1011,31 @@ def generate_basic_reactflow_from_steps(process_steps: list) -> dict:
                 {
                     "id": "start",
                     "type": "startEnd",
-                    "position": {"x": 600, "y": 80},
-                    "data": {"label": "START", "isStart": True}
+                    "position": {"x": 1050, "y": 120},
+                    "data": {
+                        "label": "START",
+                        "description": "Process Initiation Point\n\nThis marks the beginning of the workflow. Ready to begin once process steps are defined.",
+                        "isStart": True
+                    }
                 },
                 {
                     "id": "empty",
                     "type": "process", 
-                    "position": {"x": 500, "y": 200},
+                    "position": {"x": 1050, "y": 370},
                     "data": {
                         "label": "No Process Steps Defined",
-                        "description": "Use AI Assistant to add process steps"
+                        "description": "Process Definition Required\n\nUse the AI Assistant to add detailed process steps, or manually define the workflow stages to create a comprehensive process visualization."
                     }
                 },
                 {
                     "id": "end",
                     "type": "startEnd",
-                    "position": {"x": 600, "y": 320},
-                    "data": {"label": "END", "isStart": False}
+                    "position": {"x": 1050, "y": 620},
+                    "data": {
+                        "label": "END",
+                        "description": "Process Completion Point\n\nThis will mark the successful completion of the workflow once process steps are defined.",
+                        "isStart": False
+                    }
                 }
             ],
             "edges": [
@@ -1039,41 +1056,46 @@ def generate_basic_reactflow_from_steps(process_steps: list) -> dict:
             ]
         }
     
-    # 10-Column Grid Layout System for Maximum Organization
-    # Column 1 (x: 80):   Far left - Extra branches 
-    # Column 2 (x: 250):  Left-2 - Secondary branches
-    # Column 3 (x: 420):  Left-1 - Yes paths, Parallel Task A
-    # Column 4 (x: 590):  Left-Center - Merge points
-    # Column 5 (x: 760):  CENTER - Main flow (START, steps, decisions, END)
-    # Column 6 (x: 930):  Right-Center - Merge points
-    # Column 7 (x: 1100): Right-1 - No paths, Parallel Task B
-    # Column 8 (x: 1270): Right-2 - Secondary branches
-    # Column 9 (x: 1440): Right-3 - Alternative paths
-    # Column 10 (x: 1610): Far right - Early termination ends
+    # 10-Column Grid Layout System with Maximum Spacing
+    # Column 1 (x: 50):   Far left - Extra branches 
+    # Column 2 (x: 300):  Left-2 - Secondary branches
+    # Column 3 (x: 550):  Left-1 - Yes paths, Parallel Task A
+    # Column 4 (x: 800):  Left-Center - Merge points
+    # Column 5 (x: 1050): CENTER - Main flow (START, steps, decisions, END)
+    # Column 6 (x: 1300): Right-Center - Merge points
+    # Column 7 (x: 1550): Right-1 - No paths, Parallel Task B
+    # Column 8 (x: 1800): Right-2 - Secondary branches
+    # Column 9 (x: 2050): Right-3 - Alternative paths
+    # Column 10 (x: 2300): Far right - Early termination ends
     
-    COL_1 = 80
-    COL_2 = 250
-    COL_3 = 420   # Yes paths, Parallel A
-    COL_4 = 590   # Left merge area
-    COL_5 = 760   # MAIN COLUMN - Primary flow
-    COL_6 = 930   # Right merge area
-    COL_7 = 1100  # No paths, Parallel B
-    COL_8 = 1270  # Secondary branches
-    COL_9 = 1440  # Alternative paths
-    COL_10 = 1610 # Early termination
+    COL_1 = 50
+    COL_2 = 300
+    COL_3 = 550   # Yes paths, Parallel A
+    COL_4 = 800   # Left merge area
+    COL_5 = 1050  # MAIN COLUMN - Primary flow
+    COL_6 = 1300  # Right merge area
+    COL_7 = 1550  # No paths, Parallel B
+    COL_8 = 1800  # Secondary branches
+    COL_9 = 2050  # Alternative paths
+    COL_10 = 2300 # Early termination
     
     nodes = []
     edges = []
-    current_y = 100
-    row_height = 180  # Increased spacing between rows
+    current_y = 120
+    row_height = 250  # Much larger spacing between rows
     current_node_id = "start"
     
-    # Add start node in center column
+    # Add start node in center column with enhanced information
     nodes.append({
         "id": "start",
         "type": "startEnd",
         "position": {"x": COL_5, "y": current_y},
-        "data": {"label": "START", "isStart": True}
+        "data": {
+            "label": "START",
+            "description": "Process Initiation Point\n\nThis marks the beginning of the workflow. Ensure all prerequisites are met, resources are available, and stakeholders are notified before proceeding.",
+            "isStart": True,
+            "processPhase": "initiation"
+        }
     })
     
     current_y += row_height
@@ -1083,7 +1105,9 @@ def generate_basic_reactflow_from_steps(process_steps: list) -> dict:
         clean_step = clean_text_for_reactflow(step)
         
         if is_decision_step(step):
-            # Decision node in center column
+            # Decision node in center column with enhanced information
+            decision_description = f"Decision Point {i + 1}: {step}\n\nThis is a critical decision point in the process flow. Careful evaluation is required to determine the appropriate path forward. Consider all relevant factors, documentation, and criteria before proceeding."
+            
             nodes.append({
                 "id": node_id,
                 "type": "decision",
@@ -1091,7 +1115,10 @@ def generate_basic_reactflow_from_steps(process_steps: list) -> dict:
                 "data": {
                     "label": clean_step,
                     "question": clean_step,
-                    "stepNumber": i + 1
+                    "description": decision_description,
+                    "stepNumber": i + 1,
+                    "decisionType": "evaluation",
+                    "requiresApproval": True
                 }
             })
             
@@ -1116,9 +1143,10 @@ def generate_basic_reactflow_from_steps(process_steps: list) -> dict:
                     "type": "process",
                     "position": {"x": COL_3, "y": current_y},
                     "data": {
-                        "label": "Yes - Continue",
-                        "description": "Approved path",
-                        "isConditionResult": True
+                        "label": "Yes - Approved",
+                        "description": f"Requirements met for: {clean_step[:50]}... Continue with next step in the process flow.",
+                        "isConditionResult": True,
+                        "resultType": "approved"
                     }
                 },
                 {
@@ -1126,9 +1154,10 @@ def generate_basic_reactflow_from_steps(process_steps: list) -> dict:
                     "type": "process",
                     "position": {"x": COL_7, "y": current_y},
                     "data": {
-                        "label": "No - Alternative",
-                        "description": "Alternative handling",
-                        "isConditionResult": True
+                        "label": "No - Alternative Action",
+                        "description": f"Requirements not met for: {clean_step[:50]}... Alternative handling or escalation required.",
+                        "isConditionResult": True,
+                        "resultType": "rejected"
                     }
                 }
             ])
@@ -1164,15 +1193,19 @@ def generate_basic_reactflow_from_steps(process_steps: list) -> dict:
             current_node_id = node_id  # Continue from decision node
             
         elif is_parallel_step(step):
-            # Parallel node in center column
+            # Parallel node in center column with enhanced information
+            parallel_description = f"Parallel Processing {i + 1}: {step}\n\nThis step involves concurrent execution of multiple tasks to optimize efficiency. Both parallel branches must be completed before proceeding to the next step. Coordination and synchronization are essential."
+            
             nodes.append({
                 "id": node_id,
                 "type": "parallel",
                 "position": {"x": COL_5, "y": current_y},
                 "data": {
                     "label": clean_step,
-                    "description": "Parallel execution",
-                    "stepNumber": i + 1
+                    "description": parallel_description,
+                    "stepNumber": i + 1,
+                    "executionType": "concurrent",
+                    "requiresSync": True
                 }
             })
             
@@ -1198,8 +1231,9 @@ def generate_basic_reactflow_from_steps(process_steps: list) -> dict:
                     "position": {"x": COL_3, "y": current_y},
                     "data": {
                         "label": "Parallel Task A",
-                        "description": "First parallel task",
-                        "isParallel": True
+                        "description": f"Concurrent execution of first part: {clean_step[:40]}... This task runs simultaneously with Task B to optimize process efficiency.",
+                        "isParallel": True,
+                        "taskType": "concurrent_a"
                     }
                 },
                 {
@@ -1208,8 +1242,9 @@ def generate_basic_reactflow_from_steps(process_steps: list) -> dict:
                     "position": {"x": COL_7, "y": current_y},
                     "data": {
                         "label": "Parallel Task B",
-                        "description": "Second parallel task",
-                        "isParallel": True
+                        "description": f"Concurrent execution of second part: {clean_step[:40]}... This task runs simultaneously with Task A to optimize process efficiency.",
+                        "isParallel": True,
+                        "taskType": "concurrent_b"
                     }
                 }
             ])
@@ -1238,15 +1273,23 @@ def generate_basic_reactflow_from_steps(process_steps: list) -> dict:
             current_node_id = node_id  # Continue from parallel node
             
         else:
-            # Regular process step in center column
+            # Regular process step in center column with enhanced descriptions
+            step_description = f"Step {i + 1} of {len(process_steps)}: {step}"
+            if len(step) > 60:
+                step_description += "\n\nThis is a detailed process step that requires careful attention to ensure proper execution and compliance with established procedures."
+            else:
+                step_description += f"\n\nProcess Action: Execute this step as part of the overall workflow. Duration may vary based on complexity and available resources."
+            
             nodes.append({
                 "id": node_id,
                 "type": "process",
                 "position": {"x": COL_5, "y": current_y},
                 "data": {
                     "label": f"{i + 1}. {clean_step}",
-                    "description": step if len(step) > 50 else None,
-                    "stepNumber": i + 1
+                    "description": step_description,
+                    "stepNumber": i + 1,
+                    "stepTotal": len(process_steps),
+                    "processPhase": "execution"
                 }
             })
             
@@ -1262,12 +1305,17 @@ def generate_basic_reactflow_from_steps(process_steps: list) -> dict:
             current_node_id = node_id
             current_y += row_height
     
-    # Add end node in center column
+    # Add end node in center column with enhanced information
     nodes.append({
         "id": "end",
         "type": "startEnd",
         "position": {"x": COL_5, "y": current_y},
-        "data": {"label": "END", "isStart": False}
+        "data": {
+            "label": "END",
+            "description": "Process Completion Point\n\nThis marks the successful completion of the workflow. Ensure all deliverables are finalized, documentation is updated, and stakeholders are notified of completion.",
+            "isStart": False,
+            "processPhase": "completion"
+        }
     })
     
     edges.append({
