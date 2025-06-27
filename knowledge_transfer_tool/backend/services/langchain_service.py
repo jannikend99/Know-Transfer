@@ -198,12 +198,13 @@ TARGET SCHEMA DIMENSIONS (Extract all available information):
 11. VISUALIZATION_GRAPH: Process flow representation (if described in text)
 
 EXTRACTION GUIDELINES:
-- Extract ALL information that is explicitly mentioned or clearly implied
+- Extract ONLY information that is explicitly mentioned in the text
+- DO NOT infer, assume, or guess missing information
+- If a field is not explicitly mentioned in the text, leave it as null or empty list
 - Be specific and detailed - avoid generic or assumed information  
-- If a field is not mentioned in the text, leave it as null or empty list
-- Focus on actionable, measurable, and verifiable details
+- Focus on actionable, measurable, and verifiable details that are directly stated
 - Preserve exact terminology used in the source material
-- Extract everything available - title/description will be refined by AI if needed
+- Only extract what is directly available in the source text
 
 FORMATTING STANDARDS FOR LISTS:
 - Use "Name: Description" format for items that have clear names and descriptions
@@ -216,18 +217,19 @@ FORMATTING STANDARDS FOR LISTS:
 - For KPIS: "Metric Name: measurement description and method. Target: specific target value."
 
 QUALITY STANDARDS:
-- Extract only factual information present in the text
+- Extract only factual information that is explicitly present in the text
 - Maintain specificity - "Sales Manager" not just "Manager"  
-- Include quantitative details (timeframes, quantities, percentages)
-- Flag ambiguous information rather than making assumptions
-- Extract all 11 dimensions when available in source material
+- Include only quantitative details that are explicitly stated (timeframes, quantities, percentages)
+- NEVER make assumptions about missing information - leave dimensions empty if not explicitly mentioned
+- Only extract dimensions that are clearly and directly stated in the source material
+- If information is ambiguous or unclear, do not extract it
 
 {format_instructions}
 
 TEXT TO ANALYZE:
 {text_to_parse}
 
-Remember: Extract everything available from the source. AI will generate/refine title and description later if needed."""
+Remember: Extract ONLY what is explicitly stated in the source text. Leave dimensions empty if not clearly mentioned. Do not infer or assume missing information."""
 
 def get_process_extraction_chain():
     if not llm:
