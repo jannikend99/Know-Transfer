@@ -765,79 +765,125 @@ Exceptions & Special Cases:
     """
     
     reactflow_prompt = f"""You are an expert at creating React Flow diagrams for business processes. 
-Create a comprehensive flowchart with nodes and edges that shows the process with branches, decisions, and parallel paths where appropriate.
+Create a comprehensive flowchart with nodes and edges that shows the process with branches, decisions, loops, and early termination paths where appropriate.
 
 CRITICAL REQUIREMENTS:
 1. Analyze each step for patterns:
-   - DECISION POINTS: If step contains decision/choice language (if, when, decide, approve/reject, yes/no, check if, verify, condition)
+   - DECISION POINTS: If step contains decision/choice language (if, when, decide, approve/reject, yes/no, check if, verify, condition, meets criteria, passes/fails, complies)
+   - EARLY TERMINATION: If step mentions ending early (end process, terminate, stop, abort, cancel, exit, discontinue, halt, fail and stop)
+   - LOOP/REWORK: If step mentions going back (return to, go back, loop back, repeat, rework, redo, back to step, retry, revert to, restart from)
    - PARALLEL PROCESSES: If step mentions simultaneous/parallel/concurrent activities
    - LINEAR FLOW: Connect regular steps sequentially
 
 2. Node types to use:
-   - 'startEnd' for start/end nodes
+   - 'startEnd' for start/end nodes (including early termination ends)
    - 'process' for regular process steps
    - 'decision' for decision points
    - 'parallel' for parallel processing nodes
 
-3. Create a JSON structure with 'nodes' and 'edges' arrays:
+3. Advanced Decision Handling:
+   - STANDARD DECISIONS: Yes/No branches that merge back to main flow
+   - EARLY TERMINATION: No branch leads to early END node, Yes continues main flow
+   - LOOP DECISIONS: No branch loops back to earlier step (use dashed orange line), Yes continues forward
+   - Use appropriate edge styling: solid for normal flow, dashed for loops, red for termination paths
+
+4. Create a JSON structure with 'nodes' and 'edges' arrays:
    - Each node needs: id, type, position (x, y), data (label, description, etc.)
    - Each edge needs: id, source, target, type, markerEnd, style (optional)
+   - For loop edges, add: style: {{"stroke": "#f59e0b", "strokeDasharray": "5,5"}}, label: "Rework"
 
- 4. Position nodes vertically with proper spacing:
-    - Start at y: 50
-    - Space nodes 180px apart vertically (improved readability)
-    - Center main flow at x: 200
-    - Branch decisions left/right by ±200px (more space)
+5. Use 10-column grid layout for maximum organization:
+   - Column 1 (x: 80): Far left - Extra branches
+   - Column 2 (x: 250): Left-2 - Secondary branches  
+   - Column 3 (x: 420): Left-1 - Yes paths, Parallel Task A
+   - Column 4 (x: 590): Left-Center - Merge points
+   - Column 5 (x: 760): CENTER - Main flow (START, steps, decisions, END)
+   - Column 6 (x: 930): Right-Center - Merge points
+   - Column 7 (x: 1100): Right-1 - No paths, Parallel Task B
+   - Column 8 (x: 1270): Right-2 - Secondary branches
+   - Column 9 (x: 1440): Right-3 - Alternative paths
+   - Column 10 (x: 1610): Far right - Early termination ends
+   - Space rows 180px apart vertically for clean layout
 
-5. For decision nodes:
-   - Create yes/no branches with separate nodes
-   - Use different colors for yes (green) vs no (red) paths
-   - Merge branches back together
-
-6. For parallel nodes:
-   - Create parallel branches
-   - Use blue styling for parallel tasks
-   - Synchronize branches back together
+6. Enhanced Decision Examples:
+   - "If quality check passes" → Standard decision with merge
+   - "If critical error found, stop process" → Early termination (No leads to EARLY END)
+   - "If rework needed, return to validation step" → Loop decision (No loops back)
 
 7. Clean all text - remove bullets, markdown, special characters
 
- EXAMPLE STRUCTURE:
- ```json
- {{
-   "nodes": [
-     {{
-       "id": "start",
-       "type": "startEnd", 
-       "position": {{"x": 200, "y": 50}},
-       "data": {{"label": "START", "isStart": true}}
-     }},
-     {{
-       "id": "step-1",
-       "type": "process",
-       "position": {{"x": 150, "y": 230}},
-       "data": {{"label": "1. Review request", "stepNumber": 1}}
-     }},
-     {{
-       "id": "end",
-       "type": "startEnd",
-       "position": {{"x": 200, "y": 410}},
-       "data": {{"label": "END", "isStart": false}}
-     }}
-   ],
+EXAMPLE ENHANCED STRUCTURE:
+```json
+{{
+  "nodes": [
+    {{
+      "id": "start",
+      "type": "startEnd", 
+      "position": {{"x": 760, "y": 100}},
+      "data": {{"label": "START", "isStart": true}}
+    }},
+    {{
+      "id": "step-1", 
+      "type": "decision",
+      "position": {{"x": 760, "y": 280}},
+      "data": {{"label": "Quality check passes?", "stepNumber": 1}}
+    }},
+    {{
+      "id": "step-1-yes",
+      "type": "process",
+      "position": {{"x": 420, "y": 460}},
+      "data": {{"label": "Yes - Continue", "isConditionResult": true}}
+    }},
+    {{
+      "id": "step-1-no-rework",
+      "type": "process", 
+      "position": {{"x": 1100, "y": 460}},
+      "data": {{"label": "No - Rework Required", "isLoop": true}}
+    }},
+    {{
+      "id": "step-1-merge",
+      "type": "process",
+      "position": {{"x": 760, "y": 640}},
+      "data": {{"label": "Continue Process", "isMerge": true}}
+    }}
+  ],
   "edges": [
     {{
       "id": "e-start-step1",
-      "source": "start",
+      "source": "start", 
       "target": "step-1",
       "type": "smoothstep",
       "markerEnd": {{"type": "ArrowClosed"}}
     }},
     {{
-      "id": "e-step1-end", 
+      "id": "e-step1-yes",
       "source": "step-1",
-      "target": "end",
+      "target": "step-1-yes", 
       "type": "smoothstep",
-      "markerEnd": {{"type": "ArrowClosed"}}
+      "label": "Yes",
+      "labelStyle": {{"fill": "#10b981", "fontWeight": 600}},
+      "markerEnd": {{"type": "ArrowClosed"}},
+      "style": {{"stroke": "#10b981"}}
+    }},
+    {{
+      "id": "e-step1-no-loop",
+      "source": "step-1",
+      "target": "step-1-no-rework",
+      "type": "smoothstep", 
+      "label": "No",
+      "labelStyle": {{"fill": "#ef4444", "fontWeight": 600}},
+      "markerEnd": {{"type": "ArrowClosed"}},
+      "style": {{"stroke": "#ef4444"}}
+    }},
+    {{
+      "id": "e-rework-loop-start",
+      "source": "step-1-no-rework",
+      "target": "start",
+      "type": "smoothstep",
+      "label": "Rework", 
+      "labelStyle": {{"fill": "#f59e0b", "fontWeight": 600}},
+      "markerEnd": {{"type": "ArrowClosed"}},
+      "style": {{"stroke": "#f59e0b", "strokeDasharray": "5,5"}}
     }}
   ]
 }}
@@ -846,7 +892,7 @@ CRITICAL REQUIREMENTS:
 PROCESS DATA:
 {process_context}
 
-Generate a React Flow JSON structure with nodes and edges for this process:"""
+Generate a React Flow JSON structure with nodes and edges for this process, including sophisticated decision handling with loops and early termination:"""
 
     try:
         response_message = await llm.ainvoke([("user", reactflow_prompt)])
@@ -913,35 +959,56 @@ def is_decision_step(step_text: str) -> bool:
     decision_keywords = [
         'if ', 'when ', 'decide', 'choice', 'option', 'either', 'or ',
         'depending on', 'based on', 'determine', 'check if', 'verify',
-        'approve', 'reject', 'yes/no', 'true/false', 'condition'
+        'approve', 'reject', 'yes/no', 'true/false', 'condition',
+        'meets criteria', 'passes', 'fails', 'complies', 'satisfies'
     ]
     lower_text = step_text.lower()
     return any(keyword in lower_text for keyword in decision_keywords)
 
+def is_early_termination_step(step_text: str) -> bool:
+    """Detect if a step mentions early termination."""
+    termination_keywords = [
+        'end process', 'terminate', 'stop', 'abort', 'cancel', 'exit',
+        'end early', 'discontinue', 'halt', 'fail and stop'
+    ]
+    lower_text = step_text.lower()
+    return any(keyword in lower_text for keyword in termination_keywords)
+
+def is_loop_step(step_text: str) -> bool:
+    """Detect if a step mentions looping back or rework."""
+    loop_keywords = [
+        'return to', 'go back', 'loop back', 'repeat', 'rework', 'redo',
+        'back to step', 'retry', 'revert to', 'restart from', 'circle back'
+    ]
+    lower_text = step_text.lower()
+    return any(keyword in lower_text for keyword in loop_keywords)
+
 def is_parallel_step(step_text: str) -> bool:
-    """Detect if a step contains parallel/concurrent language."""
+    """Detect if a step mentions parallel or concurrent execution."""
     parallel_keywords = [
-        'simultaneously', 'parallel', 'concurrent', 'at the same time',
-        'meanwhile', 'in parallel', 'both ', 'all at once', 'together'
+        'simultaneously', 'concurrent', 'parallel', 'at the same time',
+        'in parallel', 'concurrently', 'both', 'together', 'meanwhile',
+        'while also', 'split into', 'divide', 'fork', 'branch out',
+        'multiple tasks', 'separate teams', 'independent', 'asynchronous'
     ]
     lower_text = step_text.lower()
     return any(keyword in lower_text for keyword in parallel_keywords)
 
 def generate_basic_reactflow_from_steps(process_steps: list) -> dict:
-    """Generate a basic React Flow structure from process steps."""
+    """Generate a clean React Flow structure with organized 5-column grid layout."""
     if not process_steps or len(process_steps) == 0:
         return {
             "nodes": [
                 {
                     "id": "start",
                     "type": "startEnd",
-                    "position": {"x": 150, "y": 50},
+                    "position": {"x": 600, "y": 80},
                     "data": {"label": "START", "isStart": True}
                 },
                 {
                     "id": "empty",
                     "type": "process", 
-                    "position": {"x": 100, "y": 170},
+                    "position": {"x": 500, "y": 200},
                     "data": {
                         "label": "No Process Steps Defined",
                         "description": "Use AI Assistant to add process steps"
@@ -950,7 +1017,7 @@ def generate_basic_reactflow_from_steps(process_steps: list) -> dict:
                 {
                     "id": "end",
                     "type": "startEnd",
-                    "position": {"x": 150, "y": 290},
+                    "position": {"x": 600, "y": 320},
                     "data": {"label": "END", "isStart": False}
                 }
             ],
@@ -972,34 +1039,55 @@ def generate_basic_reactflow_from_steps(process_steps: list) -> dict:
             ]
         }
     
+    # 10-Column Grid Layout System for Maximum Organization
+    # Column 1 (x: 80):   Far left - Extra branches 
+    # Column 2 (x: 250):  Left-2 - Secondary branches
+    # Column 3 (x: 420):  Left-1 - Yes paths, Parallel Task A
+    # Column 4 (x: 590):  Left-Center - Merge points
+    # Column 5 (x: 760):  CENTER - Main flow (START, steps, decisions, END)
+    # Column 6 (x: 930):  Right-Center - Merge points
+    # Column 7 (x: 1100): Right-1 - No paths, Parallel Task B
+    # Column 8 (x: 1270): Right-2 - Secondary branches
+    # Column 9 (x: 1440): Right-3 - Alternative paths
+    # Column 10 (x: 1610): Far right - Early termination ends
+    
+    COL_1 = 80
+    COL_2 = 250
+    COL_3 = 420   # Yes paths, Parallel A
+    COL_4 = 590   # Left merge area
+    COL_5 = 760   # MAIN COLUMN - Primary flow
+    COL_6 = 930   # Right merge area
+    COL_7 = 1100  # No paths, Parallel B
+    COL_8 = 1270  # Secondary branches
+    COL_9 = 1440  # Alternative paths
+    COL_10 = 1610 # Early termination
+    
     nodes = []
     edges = []
-    current_y = 50
-    step_height = 180  # Increased spacing
-    step_width = 400   # Wider layout
-    branch_offset = 200  # More space for branches
+    current_y = 100
+    row_height = 180  # Increased spacing between rows
     current_node_id = "start"
     
-    # Add start node
+    # Add start node in center column
     nodes.append({
         "id": "start",
         "type": "startEnd",
-        "position": {"x": step_width // 2, "y": current_y},
+        "position": {"x": COL_5, "y": current_y},
         "data": {"label": "START", "isStart": True}
     })
     
-    current_y += step_height
+    current_y += row_height
     
     for i, step in enumerate(process_steps):
         node_id = f"step-{i}"
         clean_step = clean_text_for_reactflow(step)
         
         if is_decision_step(step):
-            # Add decision node
+            # Decision node in center column
             nodes.append({
                 "id": node_id,
                 "type": "decision",
-                "position": {"x": step_width // 2, "y": current_y},
+                "position": {"x": COL_5, "y": current_y},
                 "data": {
                     "label": clean_step,
                     "question": clean_step,
@@ -1016,43 +1104,40 @@ def generate_basic_reactflow_from_steps(process_steps: list) -> dict:
                 "markerEnd": {"type": "ArrowClosed"}
             })
             
-            # Create yes/no branches
+            current_y += row_height
+            
+            # Yes branch in left column, No branch in right column
             yes_node_id = f"{node_id}-yes"
             no_node_id = f"{node_id}-no"
-            merge_node_id = f"{node_id}-merge"
             
-            current_y += step_height
-            
-            # Yes branch
-            nodes.append({
-                "id": yes_node_id,
-                "type": "process",
-                "position": {"x": step_width // 2 - branch_offset, "y": current_y},
-                "data": {
-                    "label": "Yes Path",
-                    "description": "Continue with approval",
-                    "isConditionResult": True
+            nodes.extend([
+                {
+                    "id": yes_node_id,
+                    "type": "process",
+                    "position": {"x": COL_3, "y": current_y},
+                    "data": {
+                        "label": "Yes - Continue",
+                        "description": "Approved path",
+                        "isConditionResult": True
+                    }
+                },
+                {
+                    "id": no_node_id,
+                    "type": "process",
+                    "position": {"x": COL_7, "y": current_y},
+                    "data": {
+                        "label": "No - Alternative",
+                        "description": "Alternative handling",
+                        "isConditionResult": True
+                    }
                 }
-            })
+            ])
             
-            # No branch  
-            nodes.append({
-                "id": no_node_id,
-                "type": "process",
-                "position": {"x": step_width // 2 + branch_offset, "y": current_y},
-                "data": {
-                    "label": "No Path", 
-                    "description": "Alternative handling",
-                    "isConditionResult": True
-                }
-            })
-            
-            # Decision edges
+            # Decision edges with clean routing
             edges.extend([
                 {
                     "id": f"e-{node_id}-{yes_node_id}",
                     "source": node_id,
-                    "sourceHandle": "yes",
                     "target": yes_node_id,
                     "type": "smoothstep",
                     "label": "Yes",
@@ -1063,9 +1148,8 @@ def generate_basic_reactflow_from_steps(process_steps: list) -> dict:
                 {
                     "id": f"e-{node_id}-{no_node_id}",
                     "source": node_id,
-                    "sourceHandle": "no",
                     "target": no_node_id,
-                    "type": "smoothstep", 
+                    "type": "smoothstep",
                     "label": "No",
                     "labelStyle": {"fill": "#ef4444", "fontWeight": 600},
                     "markerEnd": {"type": "ArrowClosed"},
@@ -1073,46 +1157,18 @@ def generate_basic_reactflow_from_steps(process_steps: list) -> dict:
                 }
             ])
             
-            current_y += step_height
+            current_y += row_height
             
-            # Merge node
-            nodes.append({
-                "id": merge_node_id,
-                "type": "process",
-                "position": {"x": step_width // 2, "y": current_y},
-                "data": {
-                    "label": "Continue Process",
-                    "description": "Paths merge here",
-                    "isMerge": True
-                }
-            })
-            
-            # Merge edges
-            edges.extend([
-                {
-                    "id": f"e-{yes_node_id}-{merge_node_id}",
-                    "source": yes_node_id,
-                    "target": merge_node_id,
-                    "type": "smoothstep",
-                    "markerEnd": {"type": "ArrowClosed"}
-                },
-                {
-                    "id": f"e-{no_node_id}-{merge_node_id}",
-                    "source": no_node_id,
-                    "target": merge_node_id,
-                    "type": "smoothstep",
-                    "markerEnd": {"type": "ArrowClosed"}
-                }
-            ])
-            
-            current_node_id = merge_node_id
+            # Simple merge back to center - no extra merge node unless needed
+            next_node_id = f"step-{i+1}" if i+1 < len(process_steps) else "end"
+            current_node_id = node_id  # Continue from decision node
             
         elif is_parallel_step(step):
-            # Add parallel node
+            # Parallel node in center column
             nodes.append({
                 "id": node_id,
                 "type": "parallel",
-                "position": {"x": step_width // 2, "y": current_y},
+                "position": {"x": COL_5, "y": current_y},
                 "data": {
                     "label": clean_step,
                     "description": "Parallel execution",
@@ -1129,43 +1185,40 @@ def generate_basic_reactflow_from_steps(process_steps: list) -> dict:
                 "markerEnd": {"type": "ArrowClosed"}
             })
             
-            # Create parallel branches
+            current_y += row_height
+            
+            # Parallel branches
             branch1_id = f"{node_id}-branch1"
             branch2_id = f"{node_id}-branch2"
-            merge_node_id = f"{node_id}-merge"
             
-            current_y += step_height
-            
-            # Branch 1
-            nodes.append({
-                "id": branch1_id,
-                "type": "process",
-                "position": {"x": step_width // 2 - branch_offset, "y": current_y},
-                "data": {
-                    "label": "Parallel Task A",
-                    "description": "First parallel task",
-                    "isParallel": True
+            nodes.extend([
+                {
+                    "id": branch1_id,
+                    "type": "process",
+                    "position": {"x": COL_3, "y": current_y},
+                    "data": {
+                        "label": "Parallel Task A",
+                        "description": "First parallel task",
+                        "isParallel": True
+                    }
+                },
+                {
+                    "id": branch2_id,
+                    "type": "process",
+                    "position": {"x": COL_7, "y": current_y},
+                    "data": {
+                        "label": "Parallel Task B",
+                        "description": "Second parallel task",
+                        "isParallel": True
+                    }
                 }
-            })
-            
-            # Branch 2
-            nodes.append({
-                "id": branch2_id,
-                "type": "process", 
-                "position": {"x": step_width // 2 + branch_offset, "y": current_y},
-                "data": {
-                    "label": "Parallel Task B",
-                    "description": "Second parallel task", 
-                    "isParallel": True
-                }
-            })
+            ])
             
             # Parallel edges
             edges.extend([
                 {
                     "id": f"e-{node_id}-{branch1_id}",
                     "source": node_id,
-                    "sourceHandle": "branch1",
                     "target": branch1_id,
                     "type": "smoothstep",
                     "markerEnd": {"type": "ArrowClosed"},
@@ -1174,7 +1227,6 @@ def generate_basic_reactflow_from_steps(process_steps: list) -> dict:
                 {
                     "id": f"e-{node_id}-{branch2_id}",
                     "source": node_id,
-                    "sourceHandle": "branch2",
                     "target": branch2_id,
                     "type": "smoothstep",
                     "markerEnd": {"type": "ArrowClosed"},
@@ -1182,46 +1234,15 @@ def generate_basic_reactflow_from_steps(process_steps: list) -> dict:
                 }
             ])
             
-            current_y += step_height
-            
-            # Merge node
-            nodes.append({
-                "id": merge_node_id,
-                "type": "process",
-                "position": {"x": step_width // 2, "y": current_y},
-                "data": {
-                    "label": "Synchronize",
-                    "description": "Wait for all parallel tasks",
-                    "isMerge": True
-                }
-            })
-            
-            # Merge edges
-            edges.extend([
-                {
-                    "id": f"e-{branch1_id}-{merge_node_id}",
-                    "source": branch1_id,
-                    "target": merge_node_id,
-                    "type": "smoothstep",
-                    "markerEnd": {"type": "ArrowClosed"}
-                },
-                {
-                    "id": f"e-{branch2_id}-{merge_node_id}",
-                    "source": branch2_id,
-                    "target": merge_node_id,
-                    "type": "smoothstep",
-                    "markerEnd": {"type": "ArrowClosed"}
-                }
-            ])
-            
-            current_node_id = merge_node_id
+            current_y += row_height
+            current_node_id = node_id  # Continue from parallel node
             
         else:
-            # Regular process step
+            # Regular process step in center column
             nodes.append({
                 "id": node_id,
                 "type": "process",
-                "position": {"x": step_width // 2, "y": current_y},
+                "position": {"x": COL_5, "y": current_y},
                 "data": {
                     "label": f"{i + 1}. {clean_step}",
                     "description": step if len(step) > 50 else None,
@@ -1239,14 +1260,13 @@ def generate_basic_reactflow_from_steps(process_steps: list) -> dict:
             })
             
             current_node_id = node_id
-        
-        current_y += step_height
+            current_y += row_height
     
-    # Add end node
+    # Add end node in center column
     nodes.append({
         "id": "end",
         "type": "startEnd",
-        "position": {"x": step_width // 2, "y": current_y},
+        "position": {"x": COL_5, "y": current_y},
         "data": {"label": "END", "isStart": False}
     })
     

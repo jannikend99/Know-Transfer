@@ -66,15 +66,34 @@ const ReactFlowVisualization = ({ processData, onRecreateVisualization }) => {
     return cleanText;
   };
 
-  // Detect step types
+  // Detect step types with enhanced patterns
   const isDecisionStep = (stepText) => {
     const decisionKeywords = [
       'if ', 'when ', 'decide', 'choice', 'option', 'either', 'or ',
       'depending on', 'based on', 'determine', 'check if', 'verify',
-      'approve', 'reject', 'yes/no', 'true/false', 'condition'
+      'approve', 'reject', 'yes/no', 'true/false', 'condition',
+      'meets criteria', 'passes', 'fails', 'complies', 'satisfies'
     ];
     const lowerText = stepText.toLowerCase();
     return decisionKeywords.some(keyword => lowerText.includes(keyword));
+  };
+
+  const isEarlyTermination = (stepText) => {
+    const terminationKeywords = [
+      'end process', 'terminate', 'stop', 'abort', 'cancel', 'exit',
+      'end early', 'discontinue', 'halt', 'fail and stop'
+    ];
+    const lowerText = stepText.toLowerCase();
+    return terminationKeywords.some(keyword => lowerText.includes(keyword));
+  };
+
+  const isLoopStep = (stepText) => {
+    const loopKeywords = [
+      'return to', 'go back', 'loop back', 'repeat', 'rework', 'redo',
+      'back to step', 'retry', 'revert to', 'restart from', 'circle back'
+    ];
+    const lowerText = stepText.toLowerCase();
+    return loopKeywords.some(keyword => lowerText.includes(keyword));
   };
 
   const isParallelStep = (stepText) => {
@@ -136,41 +155,44 @@ const ReactFlowVisualization = ({ processData, onRecreateVisualization }) => {
     const nodes = [];
     const edges = [];
     
-    // Layout configuration for organized arrangement
-    const layout = {
-      startX: 300,
-      startY: 80,
-      rowHeight: 140,
-      colWidth: 250,
-      branchOffset: 200,
-      centerCol: 1, // Main flow in column 1 (middle)
+    // Grid layout configuration
+    const grid = {
+      centerX: 600,        // Center column X position (column 3 of 5)
+      startY: 80,          // Starting Y position
+      rowHeight: 120,      // Space between rows
+      colWidth: 250,       // Space between columns
+      maxCols: 5,          // Maximum columns (1, 2, 3, 4, 5)
+      getColumnX: (col) => {
+        // Column positions: 1=100, 2=350, 3=600, 4=850, 5=1100
+        return 100 + (col - 1) * 250;
+      }
     };
 
     let currentRow = 0;
     let currentNodeId = 'start';
 
-    // Add start node
+    // Add start node in center column (column 3)
     nodes.push({
       id: 'start',
       type: 'startEnd',
-      position: { x: layout.startX, y: layout.startY },
+      position: { x: grid.getColumnX(3), y: grid.startY },
       data: { label: 'START', isStart: true },
     });
 
     currentRow++;
 
-    // Process each step with organized positioning  
+    // Process each step with grid-based positioning  
     steps.forEach((step, index) => {
       const nodeId = `step-${index}`;
       const cleanStep = cleanTextForNode(step);
-      const baseY = layout.startY + (currentRow * layout.rowHeight);
+      const baseY = grid.startY + (currentRow * grid.rowHeight);
       
       if (isDecisionStep(step)) {
-        // Decision node in center column
+        // Decision node in center column (column 3)
         const decisionNode = {
           id: nodeId,
           type: 'decision',
-          position: { x: layout.startX, y: baseY },
+          position: { x: grid.getColumnX(3), y: baseY },
           data: {
             label: cleanStep,
             question: cleanStep,
@@ -190,33 +212,54 @@ const ReactFlowVisualization = ({ processData, onRecreateVisualization }) => {
 
         currentRow++;
 
-        // Yes and No branches in organized columns
+        // Enhanced decision branches with more options
         const yesNodeId = `${nodeId}-yes`;
         const noNodeId = `${nodeId}-no`;
-        const branchY = layout.startY + (currentRow * layout.rowHeight);
+        const branchY = grid.startY + (currentRow * grid.rowHeight);
 
-        // Yes branch (left column)
+        // Determine branch types based on context
+        const hasEarlyTermination = isEarlyTermination(step);
+        const hasLoop = isLoopStep(step);
+
+        // Yes branch (column 2) - usually continue path
         nodes.push({
           id: yesNodeId,
           type: 'process',
-          position: { x: layout.startX - layout.branchOffset, y: branchY },
+          position: { x: grid.getColumnX(2), y: branchY },
           data: { 
-            label: 'Yes Path',
-            description: 'Continue with approval',
+            label: hasLoop ? 'Continue Process' : 'Yes - Proceed',
+            description: 'Condition met, continue workflow',
             isConditionResult: true,
           },
         });
 
-        // No branch (right column) 
+        // No branch handling (column 4)
+        let noBranchData;
+        if (hasEarlyTermination) {
+          noBranchData = {
+            label: 'No - End Process',
+            description: 'Condition not met, terminate early',
+            isTermination: true,
+          };
+        } else if (hasLoop) {
+          noBranchData = {
+            label: 'No - Rework Required',
+            description: 'Return for corrections',
+            isLoop: true,
+          };
+        } else {
+          noBranchData = {
+            label: 'No - Alternative Path',
+            description: 'Alternative handling required',
+            isConditionResult: true,
+          };
+        }
+
         nodes.push({
           id: noNodeId,
           type: 'process',
-          position: { x: layout.startX + layout.branchOffset, y: branchY },
-          data: { 
-            label: 'No Path',
-            description: 'Alternative handling', 
-            isConditionResult: true,
-          },
+          position: { x: grid.getColumnX(4), y: branchY },
+          data: noBranchData,
         });
 
         // Decision branch edges
@@ -244,46 +287,136 @@ const ReactFlowVisualization = ({ processData, onRecreateVisualization }) => {
 
         currentRow++;
 
-        // Merge node back to center column
-        const mergeNodeId = `${nodeId}-merge`;
-        const mergeY = layout.startY + (currentRow * layout.rowHeight);
+        // Handle different branch outcomes
+        if (hasEarlyTermination) {
+          // Early termination - connect No branch to END
+          const earlyEndId = `${nodeId}-early-end`;
+          const earlyEndY = grid.startY + (currentRow * grid.rowHeight);
 
-        nodes.push({
-          id: mergeNodeId,
-          type: 'process',
-          position: { x: layout.startX, y: mergeY },
-          data: { 
-            label: 'Continue Process',
-            description: 'Paths merge here',
-            isMerge: true,
-          },
-        });
+          nodes.push({
+            id: earlyEndId,
+            type: 'startEnd',
+            position: { x: grid.getColumnX(4), y: earlyEndY },
+            data: { label: 'EARLY END', isStart: false, isEarlyTermination: true },
+          });
 
-        // Merge edges - clean vertical lines
-        edges.push({
-          id: `e-${yesNodeId}-${mergeNodeId}`,
-          source: yesNodeId,
-          target: mergeNodeId,
-          type: 'smoothstep',
-          markerEnd: { type: MarkerType.ArrowClosed },
-        });
+          edges.push({
+            id: `e-${noNodeId}-${earlyEndId}`,
+            source: noNodeId,
+            target: earlyEndId,
+            type: 'smoothstep',
+            markerEnd: { type: MarkerType.ArrowClosed },
+            style: { stroke: '#ef4444' },
+          });
 
-        edges.push({
-          id: `e-${noNodeId}-${mergeNodeId}`,
-          source: noNodeId,
-          target: mergeNodeId,
-          type: 'smoothstep',
-          markerEnd: { type: MarkerType.ArrowClosed },
-        });
+          // Yes branch continues to merge
+          const mergeNodeId = `${nodeId}-merge`;
+          const mergeY = grid.startY + (currentRow * grid.rowHeight);
 
-        currentNodeId = mergeNodeId;
+          nodes.push({
+            id: mergeNodeId,
+            type: 'process',
+            position: { x: grid.getColumnX(3), y: mergeY },
+            data: { 
+              label: 'Continue Process',
+              description: 'Main flow continues',
+              isMerge: true,
+            },
+          });
+
+          edges.push({
+            id: `e-${yesNodeId}-${mergeNodeId}`,
+            source: yesNodeId,
+            target: mergeNodeId,
+            type: 'smoothstep',
+            markerEnd: { type: MarkerType.ArrowClosed },
+          });
+
+          currentNodeId = mergeNodeId;
+
+        } else if (hasLoop) {
+          // Loop back scenario - connect No branch back to an earlier step
+          const loopTargetIndex = Math.max(0, index - 2); // Go back 2 steps or to start
+          const loopTargetId = loopTargetIndex === 0 ? 'start' : `step-${loopTargetIndex}`;
+
+          edges.push({
+            id: `e-${noNodeId}-loop-${loopTargetId}`,
+            source: noNodeId,
+            target: loopTargetId,
+            type: 'smoothstep',
+            markerEnd: { type: MarkerType.ArrowClosed },
+            style: { stroke: '#f59e0b', strokeDasharray: '5,5' },
+            label: 'Rework',
+            labelStyle: { fill: '#f59e0b', fontWeight: 600 },
+          });
+
+          // Yes branch continues to merge
+          const mergeNodeId = `${nodeId}-merge`;
+          const mergeY = grid.startY + (currentRow * grid.rowHeight);
+
+          nodes.push({
+            id: mergeNodeId,
+            type: 'process',
+            position: { x: grid.getColumnX(3), y: mergeY },
+            data: { 
+              label: 'Continue Process',
+              description: 'Approved, continue workflow',
+              isMerge: true,
+            },
+          });
+
+          edges.push({
+            id: `e-${yesNodeId}-${mergeNodeId}`,
+            source: yesNodeId,
+            target: mergeNodeId,
+            type: 'smoothstep',
+            markerEnd: { type: MarkerType.ArrowClosed },
+          });
+
+          currentNodeId = mergeNodeId;
+
+        } else {
+          // Standard decision with merge back to center
+          const mergeNodeId = `${nodeId}-merge`;
+          const mergeY = grid.startY + (currentRow * grid.rowHeight);
+
+          nodes.push({
+            id: mergeNodeId,
+            type: 'process',
+            position: { x: grid.getColumnX(3), y: mergeY },
+            data: { 
+              label: 'Continue Process',
+              description: 'Paths merge here',
+              isMerge: true,
+            },
+          });
+
+          // Merge edges - properly aligned
+          edges.push({
+            id: `e-${yesNodeId}-${mergeNodeId}`,
+            source: yesNodeId,
+            target: mergeNodeId,
+            type: 'smoothstep',
+            markerEnd: { type: MarkerType.ArrowClosed },
+          });
+
+          edges.push({
+            id: `e-${noNodeId}-${mergeNodeId}`,
+            source: noNodeId,
+            target: mergeNodeId,
+            type: 'smoothstep',
+            markerEnd: { type: MarkerType.ArrowClosed },
+          });
+
+          currentNodeId = mergeNodeId;
+        }
 
       } else if (isParallelStep(step)) {
-        // Parallel node in center column
+        // Parallel node in center column (column 3)
         const parallelNode = {
           id: nodeId,
           type: 'parallel',
-          position: { x: layout.startX, y: baseY },
+          position: { x: grid.getColumnX(3), y: baseY },
           data: {
             label: cleanStep,
             description: 'Parallel execution',
@@ -303,16 +436,16 @@ const ReactFlowVisualization = ({ processData, onRecreateVisualization }) => {
 
         currentRow++;
 
-        // Parallel branches in organized columns
+        // Parallel branches in grid columns
         const branch1Id = `${nodeId}-branch1`;
         const branch2Id = `${nodeId}-branch2`;
-        const branchY = layout.startY + (currentRow * layout.rowHeight);
+        const branchY = grid.startY + (currentRow * grid.rowHeight);
 
-        // Branch 1 (left column)
+        // Branch 1 (column 2)
         nodes.push({
           id: branch1Id,
           type: 'process',
-          position: { x: layout.startX - layout.branchOffset, y: branchY },
+          position: { x: grid.getColumnX(2), y: branchY },
           data: { 
             label: 'Parallel Task A',
             description: 'First parallel task',
@@ -320,11 +453,11 @@ const ReactFlowVisualization = ({ processData, onRecreateVisualization }) => {
           },
         });
 
-        // Branch 2 (right column)
+        // Branch 2 (column 4)
         nodes.push({
           id: branch2Id,
           type: 'process',
-          position: { x: layout.startX + layout.branchOffset, y: branchY },
+          position: { x: grid.getColumnX(4), y: branchY },
           data: { 
             label: 'Parallel Task B',
             description: 'Second parallel task',
@@ -353,14 +486,14 @@ const ReactFlowVisualization = ({ processData, onRecreateVisualization }) => {
 
         currentRow++;
 
-        // Sync node back to center column
+        // Sync node back to center column (column 3)
         const syncNodeId = `${nodeId}-sync`;
-        const syncY = layout.startY + (currentRow * layout.rowHeight);
+        const syncY = grid.startY + (currentRow * grid.rowHeight);
 
         nodes.push({
           id: syncNodeId,
           type: 'process',
-          position: { x: layout.startX, y: syncY },
+          position: { x: grid.getColumnX(3), y: syncY },
           data: { 
             label: 'Synchronize',
             description: 'Wait for all parallel tasks',
@@ -368,7 +501,7 @@ const ReactFlowVisualization = ({ processData, onRecreateVisualization }) => {
           },
         });
 
-        // Sync edges - clean lines back to center
+        // Sync edges - properly aligned
         edges.push({
           id: `e-${branch1Id}-${syncNodeId}`,
           source: branch1Id,
@@ -388,11 +521,11 @@ const ReactFlowVisualization = ({ processData, onRecreateVisualization }) => {
         currentNodeId = syncNodeId;
 
       } else {
-        // Regular process step in center column
+        // Regular process step in center column (column 3)
         const regularNode = {
           id: nodeId,
           type: 'process',
-          position: { x: layout.startX, y: baseY },
+          position: { x: grid.getColumnX(3), y: baseY },
           data: {
             label: `${index + 1}. ${cleanStep}`,
             description: step.length > 50 ? step : null,
@@ -416,12 +549,12 @@ const ReactFlowVisualization = ({ processData, onRecreateVisualization }) => {
       currentRow++;
     });
 
-    // Add end node in center column
-    const endY = layout.startY + (currentRow * layout.rowHeight);
+    // Add end node in center column (column 3)
+    const endY = grid.startY + (currentRow * grid.rowHeight);
     nodes.push({
       id: 'end',
       type: 'startEnd',
-      position: { x: layout.startX, y: endY },
+      position: { x: grid.getColumnX(3), y: endY },
       data: { label: 'END', isStart: false },
     });
 
