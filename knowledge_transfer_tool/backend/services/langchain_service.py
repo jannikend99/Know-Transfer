@@ -43,51 +43,98 @@ def get_basic_chat_chain():
         print("LLM not initialized, cannot create RAG chat chain.")
         return None
     
-    # Updated prompt for comprehensive process documentation with progress tracking
+    # Updated prompt for dual-role process assistant with automatic intention recognition
     prompt_template = ChatPromptTemplate.from_messages([
-        ("system", """You are an expert Business Process Documentation Assistant. Help users create complete process documentation through natural, step-by-step conversation.
+        ("system", """You are an intelligent Business Process Assistant with two distinct roles that you automatically switch between based on user intent and process completion status.
+
+## DYNAMIC ROLE SELECTION:
+
+**DOCUMENTATION ASSISTANT MODE**:
+- Purpose: Help complete the 9 process dimensions through guided conversation
+- Use when: User is sharing process information, wants to document, or when process needs completion
+- Recognition signals: User shares process details, asks "how to document", uploads files, describes steps/roles/inputs/outputs
+
+**PROCESS EXPLAINER MODE**:
+- Purpose: Answer questions about the documented process, explain concepts, provide guidance on execution
+- Use when: User is asking questions about the process, wants explanations, or when process is complete and they need guidance
+- Recognition signals: User asks "how does this work?", "what happens when?", "who should I contact?", "what are the requirements?"
+
+## AUTOMATIC INTENTION RECOGNITION:
+
+**Documentation Intent Indicators:**
+- "I need to document...", "The process involves...", "Let me explain how we..."
+- Sharing specific details (steps, roles, inputs, outputs, metrics)
+- Uploading documents, describing workflows
+- Questions about what information is needed: "What else do you need?"
+
+**Explanation Intent Indicators:**
+- "How does this process work?", "What should I do when...?", "Who is responsible for...?"
+- Questions about using/following the process: "What are the next steps?", "When does this apply?"
+- Troubleshooting: "What if...", "How do I handle...", "What happens when..."
+
+## DOCUMENTATION ASSISTANT MODE BEHAVIOR:
 
 COMMUNICATION STYLE:
 - Keep responses SHORT and focused (2-3 sentences max)
-- Ask ONE main question at a time 
-- Be conversational and natural, not overwhelming
-- Use your judgment - if information seems incomplete, ask for more details
-- Guide users step-by-step, don't dump everything at once
-- Use NATURAL LANGUAGE - never mention technical field names like "SCOPE_INCLUDED" or system terminology
+- Ask ONE main question at a time about missing/incomplete dimensions
+- Use natural, conversational language - never mention technical terms like "SCOPE_INCLUDED"
+- Be encouraging and guide step-by-step
 
-TITLE & DESCRIPTION GENERATION:
-- **GENERATE TITLE**: Only after you understand what the process does (usually after 2-3 exchanges)
-- **GENERATE DESCRIPTION**: Only after you have sufficient context about purpose, scope, and basic flow (usually after 4-5 exchanges or when user provides substantial detail)
-- These are AI-generated and don't count toward user's 9-dimension progress
-- Wait until you have enough context to write meaningful title
+PRIORITY FOCUS:
+- **COMPLETE ALL 9 DIMENSIONS FIRST** - this is the top priority
+- Only generate title/description when you have sufficient context (don't count toward 9 dimensions)
+- For complete dimensions: acknowledge briefly, don't ask deep follow-up questions
+- For incomplete dimensions: ask targeted questions to get comprehensive information
 
-USER DIMENSIONS TO COLLECT (9 dimensions for progress tracking):
+CRITICAL COMPLETION RULES:
+- **NEVER ASK ABOUT COMPLETED DIMENSIONS**: If a dimension is already complete (meets all criteria), do not ask for more information about it
+- **100% COMPLETION CELEBRATION**: When all 9 dimensions are complete (100%), congratulate the user and explain they can now ask questions about the process
+- **FOCUS ONLY ON GAPS**: Ask only about missing or partial dimensions that need more comprehensive information
+- **ONE INCOMPLETE DIMENSION AT A TIME**: Focus on completing one dimension thoroughly before moving to the next
+
+USER DIMENSIONS TO COMPLETE (9 dimensions):
 1. **Overview description**: What the process does and its purpose (needs 100+ characters)
-2. **What's included in scope**: What aspects, areas, or activities are covered by this process (needs 2+ substantial items)
-3. **What's excluded from scope**: What's specifically NOT covered or handled by this process (needs 2+ substantial items)
-4. **Process steps**: Detailed sequence of activities and decision points (needs comprehensive steps)
-5. **Required inputs**: Materials, information, or resources needed to start (needs 2+ detailed items)
-6. **Expected outputs**: Deliverables, results, or outcomes produced (needs 2+ detailed items)
-7. **Success metrics**: How performance is measured and tracked (needs 2+ detailed metrics)
-8. **Roles and responsibilities**: Who does what and has authority for decisions (needs 2+ detailed roles)
-9. **Exception handling**: What happens when things go wrong or unusual situations arise (needs 2+ detailed scenarios)
+2. **What's included in scope**: What aspects/areas are covered (needs 2+ substantial items, 30+ chars each)
+3. **What's excluded from scope**: What's NOT covered (needs 2+ substantial items, 30+ chars each)
+4. **Process steps**: Detailed sequence of activities (needs 2+ comprehensive steps, 30+ chars each)
+5. **Required inputs**: Materials/information needed to start (needs 2+ detailed items, 30+ chars each)
+6. **Expected outputs**: Deliverables/results produced (needs 2+ detailed items, 30+ chars each)
+7. **Success metrics**: How performance is measured (needs 2+ detailed metrics, 30+ chars each)
+8. **Roles and responsibilities**: Who does what (needs 2+ detailed roles, 30+ chars each)
+9. **Exception handling**: What happens when things go wrong (needs 2+ scenarios, 30+ chars each)
 
-COMPLETION CRITERIA (for progress tracking):
+COMPLETION CRITERIA:
 - **Lists**: Need at least 2 substantial items (30+ characters each) to count as COMPLETE
 - **Text fields**: Need at least 100+ characters of detailed content to count as COMPLETE
-- **Partial information doesn't count toward progress** - only comprehensive information does
+- **Partial information doesn't count** - only comprehensive information does
 
-NATURAL LANGUAGE GUIDELINES:
+## PROCESS EXPLAINER MODE BEHAVIOR:
+
+COMMUNICATION STYLE:
+- Provide clear, helpful explanations based on the documented process
+- Reference specific process elements (steps, roles, inputs, outputs, metrics)
+- Give practical guidance on process execution
+- Answer questions about process logic, timing, responsibilities
+
+RESPONSE APPROACH:
+- Use the documented process data to answer questions accurately
+- Explain how different process elements connect and work together
+- Provide context on when/why certain steps or decisions are needed
+- Help users understand their role within the process
+- Guide them through process execution when needed
+
+## UNIVERSAL GUIDELINES:
+
+NATURAL LANGUAGE:
 - Ask about "what's included in the scope" not "scope_included"
-- Ask about "process steps" not "PROCESS_STEPS" 
+- Ask about "process steps" not "PROCESS_STEPS"
 - Ask about "inputs needed" not "INPUTS"
 - Ask about "expected results" not "OUTPUTS"
 - Ask about "success metrics" not "KPIS"
 - Ask about "who's responsible" not "ROLES_RESPONSIBILITIES"
-- Ask about "exception handling" not "EXCEPTIONS_SPECIAL_CASES"
-- Always use conversational, business-friendly language
+- Always use business-friendly language
 
-FORMATTING STANDARDS (always use these formats when generating structured content):
+FORMATTING STANDARDS:
 - **Scope items**: "Item Name: description of what's included/excluded"
 - **Process steps**: "1. Action description 2. Decision point 3. Next action..."
 - **Inputs**: "Input Name: format, source, and quality criteria"
@@ -96,23 +143,24 @@ FORMATTING STANDARDS (always use these formats when generating structured conten
 - **Roles**: "Role Title: specific responsibility and authority"
 - **Exceptions**: "Exception Scenario: response action and escalation process"
 
-RESPONSE GUIDELINES:
-- Start with brief acknowledgment of what they shared
-- Ask ONE specific follow-up question about missing/incomplete dimensions
-- Apply consistent formatting standards to collected information
-- Keep it conversational and encouraging
-- Focus on getting COMPLETE information for each dimension
-- Use natural business language, never technical field names
+## CONTEXT AWARENESS:
+- **Evaluate each interaction dynamically** - consider completion status, user intent signals, and current context
+- **Switch modes fluidly** within the same conversation based on user needs
+- **No rigid thresholds** - use completion percentage as context, not as hard rules
+- **Focus on user intent** - let the user's questions and statements guide your mode selection
+- **Consider the full picture** - completion status, user signals, conversation history, and current needs
 
-FORMATTING STANDARDS FOR OUTPUT:
-- Use "Name: Description" format for structured items
-- For inputs/outputs/roles/exceptions: "Clear Name: specific description"
-- For KPIs: "Metric Name: measurement description. Target: specific value."
-- For scope items: "Area Name: description of inclusion/exclusion"
-- Always use plain text, never markdown formatting
-- Make names specific and descriptive, not generic
+## 100% COMPLETION PROTOCOL:
+- **When process reaches 100% completion**: Congratulate the user enthusiastically! Say something like "🎉 Excellent! Your process documentation is now 100% complete with all 9 dimensions thoroughly documented. You can now ask me questions about how the process works, roles and responsibilities, or anything else about your documented process."
+- **Never ask for more information about completed dimensions** - they are done and comprehensive
+- **Automatically switch to Process Explainer mode** when 100% complete, even if user was previously documenting
 
-Remember: Only generate title/description when you have sufficient context. Focus on getting complete, comprehensive information for each user dimension using natural, conversational language."""),
+## INCOMPLETE DIMENSION HANDLING:
+- **Only ask about dimensions that are missing or partial** - never ask about complete ones
+- **One dimension at a time** - complete one thoroughly before moving to next
+- **Acknowledge complete dimensions briefly** - "Great, [dimension] is well documented" then move to incomplete areas
+
+Remember: Your goal is to be helpful whether someone needs to document a process or understand how to use an existing one. Read the user's intent carefully and respond in the most appropriate mode."""),
         MessagesPlaceholder(variable_name="chat_history"),
         ("user", "Context from uploaded documents:\n--- DOCUMENT CONTEXT ---\n{retrieved_context}\n--- END CONTEXT ---\n\nUser input: {text}")
     ])
@@ -182,54 +230,64 @@ async def run_basic_chat_chain(input_text: str, process_id: str, chat_history: L
 process_output_parser = PydanticOutputParser(pydantic_object=ProcessBase)
 
 EXTRACT_PROCESS_PROMPT_TEMPLATE = """
-You are an expert Business Process Analyst. Your task is to extract comprehensive process information from the provided text to create complete documentation.
+You are an expert Business Process Analyst with a strict mandate: ONLY extract information that is explicitly stated in the provided text. DO NOT infer, assume, generate, or make up any information.
 
-TARGET SCHEMA DIMENSIONS (Extract all available information):
-1. TITLE: Clear process name (if explicitly mentioned)
-2. GENERAL_DESCRIPTION: Overview of what the process does (if explicitly described)
-3. PROCESS_STEPS: Detailed sequence of activities, decision points, branching logic
-4. SCOPE_INCLUDED: What's included in this process, boundaries, covered areas
-5. SCOPE_EXCLUDED: What's excluded from this process, out-of-scope items
-6. INPUTS: Required materials/information, formats, quality criteria
-7. OUTPUTS: Deliverables, results, formats, success criteria
-8. KPIS: Metrics, measurement methods, targets, frequency
-9. ROLES_RESPONSIBILITIES: Who does what, approval authorities, accountability
-10. EXCEPTIONS_SPECIAL_CASES: Error scenarios, alternative paths, contingency procedures  
-11. VISUALIZATION_GRAPH: Process flow representation (if described in text)
+TARGET SCHEMA DIMENSIONS (Extract ONLY if explicitly mentioned):
+1. TITLE: Clear process name (ONLY if explicitly stated as a title or process name)
+2. GENERAL_DESCRIPTION: Overview of what the process does (ONLY if explicitly described)
+3. PROCESS_STEPS: Detailed sequence of activities, decision points, branching logic (ONLY if steps are explicitly listed)
+4. SCOPE_INCLUDED: What's included in this process, boundaries, covered areas (ONLY if explicitly stated what's included)
+5. SCOPE_EXCLUDED: What's excluded from this process, out-of-scope items (ONLY if explicitly stated what's excluded)
+6. INPUTS: Required materials/information, formats, quality criteria (ONLY if explicitly mentioned as inputs/requirements)
+7. OUTPUTS: Deliverables, results, formats, success criteria (ONLY if explicitly mentioned as outputs/results)
+8. KPIS: Metrics, measurement methods, targets, frequency (ONLY if explicitly mentioned as metrics/KPIs/measurements)
+9. ROLES_RESPONSIBILITIES: Who does what, approval authorities, accountability (ONLY if explicitly mentioned who is responsible)
+10. EXCEPTIONS_SPECIAL_CASES: Error scenarios, alternative paths, contingency procedures (ONLY if explicitly mentioned what happens in exceptions)
+11. VISUALIZATION_GRAPH: Process flow representation (ONLY if explicitly described)
 
-EXTRACTION GUIDELINES:
-- Extract ONLY information that is explicitly mentioned in the text
-- DO NOT infer, assume, or guess missing information
-- If a field is not explicitly mentioned in the text, leave it as null or empty list
-- Be specific and detailed - avoid generic or assumed information  
-- Focus on actionable, measurable, and verifiable details that are directly stated
-- Preserve exact terminology used in the source material
-- Only extract what is directly available in the source text
+CRITICAL EXTRACTION RULES:
+1. **EXTRACT NOTHING UNLESS EXPLICITLY STATED**: If information is not directly mentioned in the text, leave that field empty/null
+2. **NO INFERENCE ALLOWED**: Do not infer what steps "might" be needed or what roles "probably" exist
+3. **NO ASSUMPTIONS**: Do not assume common business practices or standard procedures
+4. **NO GENERATION**: Do not create or generate any content not present in the source text
+5. **NO INTERPRETATION**: Do not interpret vague statements - only extract clear, specific information
+6. **EMPTY IS CORRECT**: It is better to leave fields empty than to guess or assume
 
-FORMATTING STANDARDS FOR LISTS:
-- Use "Name: Description" format for items that have clear names and descriptions
-- For INPUTS: "Material Name: description of requirements and specifications"
-- For OUTPUTS: "Deliverable Name: description of format and success criteria"
-- For ROLES_RESPONSIBILITIES: "Role Title: specific responsibilities and authorities"
-- For EXCEPTIONS_SPECIAL_CASES: "Exception Name: description of scenario and handling"
-- For SCOPE_INCLUDED: "Area Name: description of what's covered"
-- For SCOPE_EXCLUDED: "Area Name: description of what's not covered"
-- For KPIS: "Metric Name: measurement description and method. Target: specific target value."
+WHAT TO EXTRACT VS WHAT TO IGNORE:
+✅ EXTRACT: "The process involves three steps: 1) Review application, 2) Verify documents, 3) Approve request"
+❌ DON'T EXTRACT: If text says "It's a typical approval process" - don't assume what steps are involved
 
-QUALITY STANDARDS:
-- Extract only factual information that is explicitly present in the text
-- Maintain specificity - "Sales Manager" not just "Manager"  
-- Include only quantitative details that are explicitly stated (timeframes, quantities, percentages)
-- NEVER make assumptions about missing information - leave dimensions empty if not explicitly mentioned
-- Only extract dimensions that are clearly and directly stated in the source material
-- If information is ambiguous or unclear, do not extract it
+✅ EXTRACT: "John Smith is responsible for final approval" 
+❌ DON'T EXTRACT: If text says "Someone needs to approve this" - don't assume who or what role
+
+✅ EXTRACT: "Required inputs include customer application form and ID copy"
+❌ DON'T EXTRACT: If text says "Standard documents are needed" - don't assume what documents
+
+✅ EXTRACT: "Success is measured by processing time under 48 hours"
+❌ DON'T EXTRACT: If text says "We track performance" - don't assume what metrics
+
+✅ EXTRACT: "This process excludes international customers"
+❌ DON'T EXTRACT: Don't assume what might be excluded if not explicitly stated
+
+FORMATTING STANDARDS FOR EXTRACTED DATA:
+- **Use exact wording from source text** - do not paraphrase unless necessary for formatting
+- **Preserve terminology** - use the exact terms mentioned in the source
+- **For structured lists, use**: "Name: Description" format only if both name and description are explicitly provided
+- **For roles**: "Role Title: specific responsibilities" - only if both role and responsibilities are explicitly stated
+- **For metrics**: "Metric Name: measurement description. Target: value" - only if all components are explicitly mentioned
+
+QUALITY CONTROL:
+- Before extracting any information, ask: "Is this explicitly stated in the text?"
+- If you have any doubt about whether information is explicitly provided, DO NOT extract it
+- Leave fields empty rather than making educated guesses
+- Only extract information that is clear, specific, and directly stated
 
 {format_instructions}
 
 TEXT TO ANALYZE:
 {text_to_parse}
 
-Remember: Extract ONLY what is explicitly stated in the source text. Leave dimensions empty if not clearly mentioned. Do not infer or assume missing information."""
+REMEMBER: Your job is to be a precise extractor, not a helpful assistant. Extract ONLY what is explicitly provided. Empty fields are better than guessed content."""
 
 def get_process_extraction_chain():
     if not llm:
@@ -680,11 +738,14 @@ def assess_process_documentation_progress(process_data: dict) -> dict:
         'partial_fields': partial_fields,
         'missing_fields': missing_fields,
         'is_fully_documented': len(missing_fields) == 0 and len(partial_fields) == 0,
-        'next_priority_fields': missing_fields[:2] if missing_fields else partial_fields[:2]
+        'next_priority_fields': missing_fields[:2] if missing_fields else partial_fields[:2],
+        'should_celebrate_completion': len(missing_fields) == 0 and len(partial_fields) == 0,
+        'incomplete_dimensions': missing_fields + partial_fields,
+        'focus_message': 'All documentation complete! 🎉' if (len(missing_fields) == 0 and len(partial_fields) == 0) else f'Focus on: {", ".join((missing_fields + partial_fields)[:2])}'
     }
 
 async def run_basic_chat_chain_with_progress(input_text: str, process_id: str, chat_history: List = [], current_process_data: dict = None):
-    """Enhanced chat chain that includes process documentation progress in the context."""
+    """Enhanced chat chain that includes process documentation progress and role determination context."""
     chain = get_basic_chat_chain()
     if not chain or not embeddings_model:
         return "RAG chat chain not available (LLM or Embeddings likely not initialized)."
@@ -694,23 +755,68 @@ async def run_basic_chat_chain_with_progress(input_text: str, process_id: str, c
     if current_process_data:
         progress = assess_process_documentation_progress(current_process_data)
         
+        # Provide flexible context for AI to determine appropriate mode
+        completion_percentage = progress['completion_percentage']
+        
+        # Analyze user input for intent signals (for context, not hardcoded decisions)
+        input_lower = input_text.lower()
+        
+        # Documentation intent indicators
+        doc_signals = [
+            "document", "the process involves", "let me explain", "we do", "the steps are",
+            "our process", "first we", "then we", "the inputs are", "the outputs are",
+            "responsible for", "when something goes wrong", "exceptions include",
+            "what else do you need", "is this complete", "add this", "update this"
+        ]
+        
+        # Explanation intent indicators  
+        explain_signals = [
+            "how does this work", "what should i do", "who should i contact",
+            "what happens when", "what are the requirements", "how do i",
+            "what if", "when does this apply", "what are the next steps",
+            "can you explain", "help me understand", "what does this mean"
+        ]
+        
+        doc_signals_found = [signal for signal in doc_signals if signal in input_lower]
+        explain_signals_found = [signal for signal in explain_signals if signal in input_lower]
+        
         progress_info = f"""
-CURRENT DOCUMENTATION PROGRESS:
-- User Input Status: {progress['completion_percentage']:.0f}% complete ({progress['complete_count']}/{progress['total_dimensions']} dimensions FULLY COMPLETE)
-- Complete Areas: {', '.join(progress['complete_fields']) if progress['complete_fields'] else 'None yet'}
-- Partial Areas: {', '.join(progress['partial_fields']) if progress['partial_fields'] else 'None'}  
-- Missing Areas: {', '.join(progress['missing_fields']) if progress['missing_fields'] else 'None'}
-- Next Priority: {', '.join(progress['next_priority_fields']) if progress['next_priority_fields'] else 'All user input complete!'}
+CURRENT DOCUMENTATION STATUS:
+- Overall Completion: {progress['completion_percentage']:.0f}% ({progress['complete_count']}/{progress['total_dimensions']} dimensions FULLY COMPLETE)
+- Complete Areas (DO NOT ASK ABOUT THESE): {', '.join(progress['complete_fields']) if progress['complete_fields'] else 'None yet'}
+- Partial Areas (NEED MORE INFO): {', '.join(progress['partial_fields']) if progress['partial_fields'] else 'None'}  
+- Missing Areas (PRIORITY FOCUS): {', '.join(progress['missing_fields']) if progress['missing_fields'] else 'None'}
 
-COMPLETION STANDARDS:
-- Each area needs comprehensive, detailed information to count as complete
-- Partial information does not count toward progress - aim for thorough, complete answers
-- Ask follow-up questions to get complete information for each area
+USER INTENT SIGNALS DETECTED:
+- Documentation signals found: {', '.join(doc_signals_found) if doc_signals_found else 'None'}
+- Explanation signals found: {', '.join(explain_signals_found) if explain_signals_found else 'None'}
+- User input: "{input_text[:100]}{'...' if len(input_text) > 100 else ''}"
+
+CRITICAL BEHAVIOR RULES:
+- **100% COMPLETE ({progress['completion_percentage']:.0f}% = 100%)**: {'✅ CONGRATULATE USER - All dimensions complete! Switch to Process Explainer mode.' if progress['completion_percentage'] >= 100 else '❌ Still needs work - focus on incomplete areas only.'}
+- **NEVER ASK ABOUT COMPLETED DIMENSIONS**: {', '.join(progress['complete_fields']) if progress['complete_fields'] else 'None yet'} are already complete - don't ask for more info about these!
+- **FOCUS ONLY ON GAPS**: {', '.join(progress['missing_fields'] + progress['partial_fields']) if (progress['missing_fields'] or progress['partial_fields']) else 'Nothing - all complete!'}
+
+MODE SELECTION GUIDANCE (Choose the most appropriate mode based on context):
+- **DOCUMENTATION ASSISTANT MODE**: Use when user is sharing process information, wants to document, or when process needs completion
+- **PROCESS EXPLAINER MODE**: Use when user is asking questions about the process, wants explanations, or when process is complete and they need guidance
+
+DYNAMIC BEHAVIOR RULES:
+- If process is 100% complete: Congratulate user and primarily use Process Explainer mode
+- If user is clearly providing process information: Use Documentation Assistant mode 
+- If user is asking questions about the process: Use Process Explainer mode
+- If incomplete dimensions exist and user isn't clearly asking questions: Focus on Documentation Assistant mode
+- Never ask about complete dimensions - acknowledge them briefly if mentioned
+
+COMPLETION REMINDERS:
+- Complete dimensions have comprehensive information (100+ chars for text, 2+ substantial items for lists)
+- Don't ask follow-up questions about complete dimensions - they're done!
+- When all 9 dimensions are complete, celebrate the achievement!
 
 TITLE/DESCRIPTION STATUS:
-- Title: {'Generated' if current_process_data.get('title') else 'Generate when process purpose is clear'}
+- Title: {'Generated' if current_process_data.get('title') else 'Generate when process purpose is clear (AI-generated, not counted in 9 dimensions)'}
 
-Focus on getting COMPLETE information for missing/partial areas using natural, conversational language. Only generate title when you have enough context.
+FOCUS: {progress['focus_message']}
 """
     
     retrieved_context_str = "No relevant context found in documents for this query."

@@ -28,7 +28,8 @@ from ..services.langchain_service import (
     generate_mermaid_from_process_data,
     generate_basic_mermaid_from_steps,
     generate_reactflow_from_process_data,
-    generate_basic_reactflow_from_steps
+    generate_basic_reactflow_from_steps,
+    assess_process_documentation_progress
 )
 from ..services.document_service import extract_text_from_file, SUPPORTED_MIME_TYPES
 
@@ -150,7 +151,48 @@ async def upload_file_for_process(process_id: str, file: UploadFile = File(...),
                 print(f"Updated user message with transcription: '{transcript_text[:50]}...' for process {process_id}")
                 
                 text_content_for_vector_store = transcript_text
-                ai_response_text = f"**Great!** I've transcribed your voice message and found some good process information. \n\nWhat **specific steps** are involved in this process?"
+                
+                # Check current completion status and generate dynamic response
+                current_process_data = {
+                    'title': db_process.title,
+                    'general_description': db_process.general_description,
+                    'process_steps': db_process.process_steps or [],
+                    'scope_included': db_process.scope_included or [],
+                    'scope_excluded': db_process.scope_excluded or [],
+                    'inputs': db_process.inputs or [],
+                    'outputs': db_process.outputs or [],
+                    'kpis': db_process.kpis or [],
+                    'roles_responsibilities': db_process.roles_responsibilities or [],
+                    'exceptions_special_cases': db_process.exceptions_special_cases or [],
+                    'visualization_graph': db_process.visualization_graph
+                }
+                
+                progress = assess_process_documentation_progress(current_process_data)
+                base_message = f"**Great!** I've transcribed your voice message and found some good process information."
+                
+                if progress['completion_percentage'] >= 100:
+                    ai_response_text = f"{base_message}\n\n🎉 **Excellent!** Your process documentation is now **100% complete** with all 9 dimensions thoroughly documented! You can now ask me questions about how the process works, roles and responsibilities, or anything else about your documented process."
+                elif progress['next_priority_fields']:
+                    next_field = progress['next_priority_fields'][0]
+                    questions = {
+                        'Overview': 'What is the main purpose and goal of this process?',
+                        'Scope (What\'s Included)': 'What specific areas, activities, or aspects are covered by this process?',
+                        'Scope (What\'s Excluded)': 'What is specifically NOT covered or handled by this process?',
+                        'Process Steps': 'What are the main steps someone would follow in this process?',
+                        'Required Inputs': 'What inputs or materials does someone need to start this process?',
+                        'Expected Outputs': 'What deliverables or results does this process produce?',
+                        'Success Metrics': 'How do you measure success or performance for this process?',
+                        'Roles & Responsibilities': 'Who is responsible for different parts of this process?',
+                        'Exception Handling': 'What happens when things go wrong or there are exceptions?'
+                    }
+                    question = questions.get(next_field, f'Can you tell me more about the {next_field.lower()}?')
+                    ai_response_text = f"{base_message}\n\n{question}"
+                else:
+                    # If no priority fields but not 100% complete, check completion status for appropriate response
+                    if progress['completion_percentage'] >= 100:
+                        ai_response_text = f"{base_message}\n\n🎉 Your process documentation is **100% complete**! You can now ask me questions about how it works or anything else about your documented process."
+                    else:
+                        ai_response_text = f"{base_message}\n\nWhat else would you like to tell me about this process?"
             elif transcript_text: # Error in transcription
                 # Update the user message to show the error instead of the filename
                 db_upload_msg.content = f"Voice message transcription failed: {transcript_text}"
@@ -158,18 +200,41 @@ async def upload_file_for_process(process_id: str, file: UploadFile = File(...),
                 db.refresh(db_upload_msg)
                 print(f"Updated user message with transcription error for process {process_id}")
                 
-                ai_response_text = f"I had trouble with that audio file. Could you try **recording again** or just tell me about your process in text?"
+                # Check completion status for dynamic guidance even on transcription errors
+                current_process_data = {
+                    'title': db_process.title,
+                    'general_description': db_process.general_description,
+                    'process_steps': db_process.process_steps or [],
+                    'scope_included': db_process.scope_included or [],
+                    'scope_excluded': db_process.scope_excluded or [],
+                    'inputs': db_process.inputs or [],
+                    'outputs': db_process.outputs or [],
+                    'kpis': db_process.kpis or [],
+                    'roles_responsibilities': db_process.roles_responsibilities or [],
+                    'exceptions_special_cases': db_process.exceptions_special_cases or [],
+                    'visualization_graph': db_process.visualization_graph
+                }
+                
+                progress = assess_process_documentation_progress(current_process_data)
+                
+                if progress['completion_percentage'] >= 100:
+                    ai_response_text = f"I had trouble with that audio file. Could you try **recording again**? Since your process documentation is complete, you can also ask me questions about how it works!"
+                elif progress['next_priority_fields']:
+                    next_field = progress['next_priority_fields'][0].lower()
+                    ai_response_text = f"I had trouble with that audio file. Could you try **recording again** or just tell me about the {next_field} for this process?"
+                else:
+                    ai_response_text = f"I had trouble with that audio file. Could you try **recording again** or just tell me about your process?"
 
         elif file.content_type in SUPPORTED_MIME_TYPES:
             print(f"Processing document file: {file.filename} ({file.content_type})")
             extracted_doc_text = extract_text_from_file(file_location, file.content_type)
             if extracted_doc_text and not extracted_doc_text.startswith("Error"):
                 text_content_for_vector_store = extracted_doc_text
-                ai_response_text = f"**Excellent!** I've processed your document **\"{file.filename}\"** and found some useful process information. \n\nWhat are the **main steps** someone would follow in this process?"
-
+                
                 structured_data_from_doc_model = await extract_process_from_text(extracted_doc_text)
+                
+                # Update the process with extracted data if any was found
                 if structured_data_from_doc_model:
-                    ai_response_text = f"**Perfect!** I found structured process information in **\"{file.filename}\"** and updated your documentation. \n\nWhat **inputs or materials** does someone need to start this process?"
                     for key, value in structured_data_from_doc_model.model_dump(exclude_none=True).items():
                         if hasattr(db_process, key):
                             if isinstance(value, list) and isinstance(getattr(db_process, key), list):
@@ -181,8 +246,80 @@ async def upload_file_for_process(process_id: str, file: UploadFile = File(...),
                                 setattr(db_process, key, value)
                     db.commit()
                     db.refresh(db_process)
+                
+                # Always assess current completion status and generate dynamic response
+                current_process_data = {
+                    'title': db_process.title,
+                    'general_description': db_process.general_description,
+                    'process_steps': db_process.process_steps or [],
+                    'scope_included': db_process.scope_included or [],
+                    'scope_excluded': db_process.scope_excluded or [],
+                    'inputs': db_process.inputs or [],
+                    'outputs': db_process.outputs or [],
+                    'kpis': db_process.kpis or [],
+                    'roles_responsibilities': db_process.roles_responsibilities or [],
+                    'exceptions_special_cases': db_process.exceptions_special_cases or [],
+                    'visualization_graph': db_process.visualization_graph
+                }
+                
+                # Assess what dimensions are still incomplete 
+                progress = assess_process_documentation_progress(current_process_data)
+                
+                # Generate dynamic response based on completion status
+                if structured_data_from_doc_model:
+                    base_message = f"**Perfect!** I found structured process information in **\"{file.filename}\"** and updated your documentation."
+                else:
+                    base_message = f"**Excellent!** I've processed your document **\"{file.filename}\"** and found some useful process information."
+                
+                if progress['completion_percentage'] >= 100:
+                    ai_response_text = f"{base_message}\n\n🎉 **Excellent!** Your process documentation is now **100% complete** with all 9 dimensions thoroughly documented! You can now ask me questions about how the process works, roles and responsibilities, or anything else about your documented process."
+                elif progress['next_priority_fields']:
+                    next_field = progress['next_priority_fields'][0]
+                    # Generate natural questions for different dimensions
+                    questions = {
+                        'Overview': 'What is the main purpose and goal of this process?',
+                        'Scope (What\'s Included)': 'What specific areas, activities, or aspects are covered by this process?',
+                        'Scope (What\'s Excluded)': 'What is specifically NOT covered or handled by this process?',
+                        'Process Steps': 'What are the main steps someone would follow in this process?',
+                        'Required Inputs': 'What inputs or materials does someone need to start this process?',
+                        'Expected Outputs': 'What deliverables or results does this process produce?',
+                        'Success Metrics': 'How do you measure success or performance for this process?',
+                        'Roles & Responsibilities': 'Who is responsible for different parts of this process?',
+                        'Exception Handling': 'What happens when things go wrong or there are exceptions?'
+                    }
+                    question = questions.get(next_field, f'Can you tell me more about the {next_field.lower()}?')
+                    ai_response_text = f"{base_message}\n\n{question}"
+                else:
+                    # If no priority fields but not 100% complete, check completion status for appropriate response
+                    if progress['completion_percentage'] >= 100:
+                        ai_response_text = f"{base_message}\n\n🎉 Your process documentation is **100% complete**! You can now ask me questions about how it works or anything else about your documented process."
+                    else:
+                        ai_response_text = f"{base_message}\n\nWhat else would you like to tell me about this process?"
             else:
-                ai_response_text = f"I couldn't extract text from **\"{file.filename}\"**. Could you try a **different format** (PDF or DOCX work best) or just describe the key steps to me?"
+                # Even for failed extractions, check completion status for dynamic guidance
+                current_process_data = {
+                    'title': db_process.title,
+                    'general_description': db_process.general_description,
+                    'process_steps': db_process.process_steps or [],
+                    'scope_included': db_process.scope_included or [],
+                    'scope_excluded': db_process.scope_excluded or [],
+                    'inputs': db_process.inputs or [],
+                    'outputs': db_process.outputs or [],
+                    'kpis': db_process.kpis or [],
+                    'roles_responsibilities': db_process.roles_responsibilities or [],
+                    'exceptions_special_cases': db_process.exceptions_special_cases or [],
+                    'visualization_graph': db_process.visualization_graph
+                }
+                
+                progress = assess_process_documentation_progress(current_process_data)
+                
+                if progress['completion_percentage'] >= 100:
+                    ai_response_text = f"I couldn't extract text from **\"{file.filename}\"**. Could you try a **different format** (PDF or DOCX work best)? Since your process documentation is complete, you can also ask me questions about how it works!"
+                elif progress['next_priority_fields']:
+                    next_field = progress['next_priority_fields'][0].lower()
+                    ai_response_text = f"I couldn't extract text from **\"{file.filename}\"**. Could you try a **different format** (PDF or DOCX work best) or just tell me about the {next_field} for this process?"
+                else:
+                    ai_response_text = f"I couldn't extract text from **\"{file.filename}\"**. Could you try a **different format** (PDF or DOCX work best) or just describe your process to me?"
 
         # Save the AI response (after processing is complete)
         if ai_response_text:
@@ -236,11 +373,51 @@ async def process_chat(process_id: str, message_payload: Dict[str, str], db: Ses
         existing_messages = db.query(models.ChatMessage).filter(models.ChatMessage.process_id == process_id).count()
         
         if existing_messages == 0:
-            welcome_text = """Hello! I'm your Business Process Documentation Assistant. 
+            # Check current completion status to tailor welcome message
+            current_process_data = {
+                'title': db_process.title,
+                'general_description': db_process.general_description,
+                'process_steps': db_process.process_steps or [],
+                'scope_included': db_process.scope_included or [],
+                'scope_excluded': db_process.scope_excluded or [],
+                'inputs': db_process.inputs or [],
+                'outputs': db_process.outputs or [],
+                'kpis': db_process.kpis or [],
+                'roles_responsibilities': db_process.roles_responsibilities or [],
+                'exceptions_special_cases': db_process.exceptions_special_cases or [],
+                'visualization_graph': db_process.visualization_graph
+            }
+            
+            progress = assess_process_documentation_progress(current_process_data)
+            
+            if progress['completion_percentage'] >= 100:
+                welcome_text = """Hello! I'm your intelligent Business Process Assistant. 
 
-I'll help you create complete process documentation by asking targeted questions to capture every important detail. You can share information through text, voice messages, or document uploads.
+🎉 **Great news!** Your process documentation is **100% complete** with all 9 dimensions thoroughly documented!
 
-What process would you like to document today?"""
+💡 **I'm now in Process Explainer mode**: I can answer questions about how the process works, explain roles and responsibilities, help troubleshoot issues, or guide you through execution.
+
+What would you like to know about your process?"""
+            elif progress['completion_percentage'] >= 50:
+                complete_fields = len([f for f in progress['all_fields'] if f not in progress['next_priority_fields']])
+                incomplete_fields = len(progress['next_priority_fields'])
+                welcome_text = f"""Hello! I'm your intelligent Business Process Assistant.
+
+📊 **Process Status**: {progress['completion_percentage']:.0f}% documented ({complete_fields}/9 dimensions complete)
+
+🔧 **Documentation Assistant mode**: I'll help you complete the remaining {incomplete_fields} dimensions through guided conversation.
+
+💡 **Process Explainer mode**: I can also answer questions about the parts you've already documented.
+
+What would you like to work on today?"""
+            else:
+                welcome_text = """Hello! I'm your intelligent Business Process Assistant with dual capabilities:
+
+🔧 **Documentation Assistant**: I'll help you document your business processes by asking targeted questions to capture every important detail across 9 key dimensions.
+
+💡 **Process Explainer**: Once your process is documented, I can answer questions about how it works, explain roles and responsibilities, and guide you through execution.
+
+You can communicate through text, voice messages, or document uploads. What would you like to work on today?"""
             
             # Save AI welcome message to DB
             db_welcome_message = models.ChatMessage(
