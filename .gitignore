@@ -13,7 +13,7 @@ env/
 ENV/
 env.bak/
 venv.bak/
-knowledge_transfer_tool/backend/venv/
+
 
 # Python cache and compiled files
 __pycache__/

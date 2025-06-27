@@ -50,8 +50,8 @@ const renderWithFormatting = (text) => {
 const renderKPIWithFormatting = (text) => {
   if (!text || typeof text !== 'string') return text;
 
-  // Try to parse KPI format: "Name: description. Target: value."
-  const targetMatch = text.match(/^(.+?)\.\s*Target:\s*(.+?)\.?\s*$/i);
+  // Try to parse KPI format with different separators: "Name: description | Target: value" or "Name: description. Target: value."
+  const targetMatch = text.match(/^(.+?)[\.\|]\s*Target:\s*(.+?)\.?\s*$/i);
   if (targetMatch) {
     const [, beforeTarget, targetValue] = targetMatch;
     
@@ -65,7 +65,7 @@ const renderKPIWithFormatting = (text) => {
         <div className="space-y-1">
           <div><strong>{name}</strong></div>
           <div className="text-sm text-muted-foreground">{description}</div>
-          <div className="text-sm italic">Target: {targetValue}.</div>
+          <div className="text-sm italic">Target: {targetValue}</div>
         </div>
       );
     }
@@ -205,16 +205,31 @@ const ProcessDetails = ({ processData }) => {
       </CardHeader>
       <CardContent className="pt-0">
         {Array.isArray(items) && items.length > 0 ? (
-          <div className="space-y-3">
-            {items.map((item, index) => (
-              <div key={index} className="flex items-start space-x-2">
-                <CheckCircle className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
-                <div className="text-sm flex-1">
-                  {useKPIFormatting ? renderKPIWithFormatting(item) : renderWithFormatting(item)}
+          useKPIFormatting ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {items.map((item, index) => (
+                <div key={index} className="flex items-start space-x-3 p-4 bg-muted/30 rounded-lg border hover:shadow-sm transition-shadow">
+                  <div className="flex items-center justify-center w-8 h-8 bg-primary/10 rounded-full flex-shrink-0">
+                    <TrendingUp className="h-4 w-4 text-primary" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    {renderKPIWithFormatting(item)}
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {items.map((item, index) => (
+                <div key={index} className="flex items-start space-x-2">
+                  <CheckCircle className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
+                  <div className="text-sm flex-1">
+                    {renderWithFormatting(item)}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )
         ) : (
           <div className="flex items-center space-x-2 text-muted-foreground">
             <Circle className="h-4 w-4" />

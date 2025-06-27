@@ -1,0 +1,22 @@
+fastapi
+uvicorn
+sqlalchemy
+# sqlite3 is a built-in module, no need to list it here
+langchain
+langchain-openai
+langchain-community
+# chromadb
+langchain-chroma
+openai
+python-multipart
+pypdf2
+python-pptx
+python-docx
+openpyxl
+pandas
+python-dotenv
+reportlab
+# For generating images from Mermaid diagrams
+Pillow
+requests
+cairosvg 
