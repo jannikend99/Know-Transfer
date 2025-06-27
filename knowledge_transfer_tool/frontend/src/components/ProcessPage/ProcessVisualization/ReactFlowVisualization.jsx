@@ -506,8 +506,6 @@ const ReactFlowVisualization = ({ processData, onRecreateVisualization }) => {
     }
   };
 
-
-
   return (
     <Card className="shadow-sm">
       <CardHeader className="pb-3">
@@ -547,7 +545,7 @@ const ReactFlowVisualization = ({ processData, onRecreateVisualization }) => {
         )}
         
         {!isLoading && !error && (
-          <div className="w-full h-[600px] border border-gray-200 rounded-lg bg-gray-50" ref={reactFlowWrapper}>
+          <div className="w-full h-[600px]" ref={reactFlowWrapper}>
             <ReactFlow
               nodes={nodes}
               edges={edges}
@@ -582,7 +580,6 @@ const ReactFlowVisualization = ({ processData, onRecreateVisualization }) => {
                 maskColor="rgb(240, 240, 240, 0.6)"
                 position="bottom-right"
               />
-              <Background variant="dots" gap={40} size={0.5} color="#e5e7eb" />
               <Panel position="top-left" className="bg-white/90 backdrop-blur-sm rounded px-2 py-1 text-xs text-gray-600 shadow-sm">
                 <div className="flex items-center space-x-1">
                   <Maximize2 className="h-3 w-3" />
