@@ -98,13 +98,20 @@ FORMATTING STANDARDS (always use these formats when generating structured conten
 - **Exceptions**: "• **[Scenario]:** [Response/Action] | **Escalation:** [process]"
 
 RESPONSE GUIDELINES:
-- Use **markdown formatting** for structure and emphasis
 - Start with brief acknowledgment of what they shared
 - Ask ONE specific follow-up question about missing/incomplete dimensions
 - Apply consistent formatting standards to collected information
 - Keep it conversational and encouraging
 - Focus on getting COMPLETE information for each dimension
 - Use natural business language, never technical field names
+
+FORMATTING STANDARDS FOR OUTPUT:
+- Use "Name: Description" format for structured items
+- For inputs/outputs/roles/exceptions: "Clear Name: specific description"
+- For KPIs: "Metric Name: measurement description. Target: specific value."
+- For scope items: "Area Name: description of inclusion/exclusion"
+- Always use plain text, never markdown formatting
+- Make names specific and descriptive, not generic
 
 Remember: Only generate title/description when you have sufficient context. Focus on getting complete, comprehensive information for each user dimension using natural, conversational language."""),
         MessagesPlaceholder(variable_name="chat_history"),
@@ -198,6 +205,16 @@ EXTRACTION GUIDELINES:
 - Focus on actionable, measurable, and verifiable details
 - Preserve exact terminology used in the source material
 - Extract everything available - title/description will be refined by AI if needed
+
+FORMATTING STANDARDS FOR LISTS:
+- Use "Name: Description" format for items that have clear names and descriptions
+- For INPUTS: "Material Name: description of requirements and specifications"
+- For OUTPUTS: "Deliverable Name: description of format and success criteria"
+- For ROLES_RESPONSIBILITIES: "Role Title: specific responsibilities and authorities"
+- For EXCEPTIONS_SPECIAL_CASES: "Exception Name: description of scenario and handling"
+- For SCOPE_INCLUDED: "Area Name: description of what's covered"
+- For SCOPE_EXCLUDED: "Area Name: description of what's not covered"
+- For KPIS: "Metric Name: measurement description and method. Target: specific target value."
 
 QUALITY STANDARDS:
 - Extract only factual information present in the text

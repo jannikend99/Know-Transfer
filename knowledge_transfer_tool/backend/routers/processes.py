@@ -36,11 +36,16 @@ router = APIRouter()
 
 @router.post("/processes", response_model=schemas.Process)
 def create_process(process: schemas.ProcessCreate, db: Session = Depends(get_db)):
-    db_process = models.Process(**process.dict())
-    db.add(db_process)
-    db.commit()
-    db.refresh(db_process)
-    return db_process
+    try:
+        db_process = models.Process(**process.dict())
+        db.add(db_process)
+        db.commit()
+        db.refresh(db_process)
+        return db_process
+    except Exception as e:
+        print(f"Error creating process: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to create process: {str(e)}")
 
 @router.get("/processes", response_model=List[schemas.Process])
 def read_processes(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
@@ -60,14 +65,19 @@ def update_process(process_id: str, process: schemas.ProcessUpdate, db: Session 
     if db_process is None:
         raise HTTPException(status_code=404, detail="Process not found")
     
-    update_data = process.dict(exclude_unset=True)
-    for key, value in update_data.items():
-        setattr(db_process, key, value)
-    
-    db.add(db_process)
-    db.commit()
-    db.refresh(db_process)
-    return db_process
+    try:
+        update_data = process.dict(exclude_unset=True)
+        for key, value in update_data.items():
+            setattr(db_process, key, value)
+        
+        db.add(db_process)
+        db.commit()
+        db.refresh(db_process)
+        return db_process
+    except Exception as e:
+        print(f"Error updating process {process_id}: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to update process: {str(e)}")
 
 @router.delete("/processes/{process_id}", response_model=schemas.Process)
 def delete_process(process_id: str, db: Session = Depends(get_db)):

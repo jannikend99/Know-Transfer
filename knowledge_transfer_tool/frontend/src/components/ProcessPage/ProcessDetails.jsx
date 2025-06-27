@@ -22,10 +22,9 @@ import {
   CardContent,
   CardHeader,
   CardTitle,
-} from "../../ui/card";
+} from "../ui/card";
 
-import { Badge } from "../../ui/badge";
-import MermaidVisualization from './MermaidVisualization';
+import { Badge } from "../ui/badge";
 
 // Helper function to format text with "Name: Description" pattern
 const renderWithFormatting = (text) => {
@@ -76,15 +75,11 @@ const renderKPIWithFormatting = (text) => {
   return renderWithFormatting(text);
 };
 
-// This component will display process fields.
-// Editing functionality will be added later and will involve lifting state.
 const ProcessDetails = ({ processData }) => {
-
   // Calculate completion status
   const getProcessCompletion = () => {
     if (!processData) return { completed: 0, total: 0, percentage: 0, missing: [] };
 
-    // Match the backend's 9 user dimensions (including overview)
     const categories = [
       { 
         key: 'general_description', 
@@ -92,7 +87,6 @@ const ProcessDetails = ({ processData }) => {
         check: (data) => {
           const desc = data.general_description;
           if (!desc || !desc.trim) return false;
-          // Need at least 100 characters for text fields
           return desc.trim().length >= 100;
         }
       },
@@ -102,7 +96,6 @@ const ProcessDetails = ({ processData }) => {
         check: (data) => {
           const items = data.scope_included;
           if (!Array.isArray(items) || items.length === 0) return false;
-          // Need at least 2 substantial items (30+ characters each)
           const substantial = items.filter(item => item && item.trim().length >= 30);
           return substantial.length >= 2;
         }
@@ -113,7 +106,6 @@ const ProcessDetails = ({ processData }) => {
         check: (data) => {
           const items = data.scope_excluded;
           if (!Array.isArray(items) || items.length === 0) return false;
-          // Need at least 2 substantial items (30+ characters each)
           const substantial = items.filter(item => item && item.trim().length >= 30);
           return substantial.length >= 2;
         }
@@ -124,7 +116,6 @@ const ProcessDetails = ({ processData }) => {
         check: (data) => {
           const steps = data.process_steps;
           if (!Array.isArray(steps) || steps.length === 0) return false;
-          // Need at least 2 substantial items (30+ characters each)
           const substantial = steps.filter(step => step && step.trim().length >= 30);
           return substantial.length >= 2;
         }
@@ -135,7 +126,6 @@ const ProcessDetails = ({ processData }) => {
         check: (data) => {
           const items = data.inputs;
           if (!Array.isArray(items) || items.length === 0) return false;
-          // Need at least 2 substantial items (30+ characters each)
           const substantial = items.filter(item => item && item.trim().length >= 30);
           return substantial.length >= 2;
         }
@@ -146,7 +136,6 @@ const ProcessDetails = ({ processData }) => {
         check: (data) => {
           const items = data.outputs;
           if (!Array.isArray(items) || items.length === 0) return false;
-          // Need at least 2 substantial items (30+ characters each)
           const substantial = items.filter(item => item && item.trim().length >= 30);
           return substantial.length >= 2;
         }
@@ -157,7 +146,6 @@ const ProcessDetails = ({ processData }) => {
         check: (data) => {
           const items = data.kpis;
           if (!Array.isArray(items) || items.length === 0) return false;
-          // Need at least 2 substantial items (30+ characters each)
           const substantial = items.filter(item => item && item.trim().length >= 30);
           return substantial.length >= 2;
         }
@@ -168,7 +156,6 @@ const ProcessDetails = ({ processData }) => {
         check: (data) => {
           const items = data.roles_responsibilities;
           if (!Array.isArray(items) || items.length === 0) return false;
-          // Need at least 2 substantial items (30+ characters each)
           const substantial = items.filter(item => item && item.trim().length >= 30);
           return substantial.length >= 2;
         }
@@ -179,7 +166,6 @@ const ProcessDetails = ({ processData }) => {
         check: (data) => {
           const items = data.exceptions_special_cases;
           if (!Array.isArray(items) || items.length === 0) return false;
-          // Need at least 2 substantial items (30+ characters each)
           const substantial = items.filter(item => item && item.trim().length >= 30);
           return substantial.length >= 2;
         }
@@ -195,8 +181,6 @@ const ProcessDetails = ({ processData }) => {
 
   const completion = getProcessCompletion();
 
-  // processData is now directly from props, assumed to be populated by the parent.
-
   if (!processData) {
     return (
       <div className="p-4 text-center text-muted-foreground">
@@ -206,66 +190,7 @@ const ProcessDetails = ({ processData }) => {
     );
   }
 
-  const renderMetricCard = (title, value, icon, color = "default") => (
-    <Card className="h-full">
-      <CardContent className="p-4">
-        <div className="flex items-center space-x-3">
-          <div className={`flex items-center justify-center w-10 h-10 rounded-lg bg-${color === 'default' ? 'muted' : color}/10`}>
-            {React.createElement(icon, { 
-              className: `h-5 w-5 text-${color === 'default' ? 'muted-foreground' : color}` 
-            })}
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-muted-foreground">{title}</p>
-            <p className="text-lg font-semibold truncate">{value || 'Not specified'}</p>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
-
-  const renderKPIsCard = () => {
-    const kpis = processData.kpis;
-    
-    return (
-      <Card className="shadow-sm">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-lg flex items-center space-x-2">
-            <BarChart3 className="h-5 w-5 text-primary" />
-            <span>Key Performance Indicators</span>
-            {Array.isArray(kpis) && kpis.length > 0 && (
-              <Badge variant="secondary" className="ml-auto">
-                {kpis.length}
-              </Badge>
-            )}
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="pt-0">
-          {Array.isArray(kpis) && kpis.length > 0 ? (
-            <div className="space-y-3">
-              {kpis.map((kpi, index) => (
-                <div key={index} className="flex items-start space-x-3 p-3 bg-muted/30 rounded-lg border">
-                  <div className="flex items-center justify-center w-8 h-8 bg-primary/10 rounded-full flex-shrink-0">
-                    <TrendingUp className="h-4 w-4 text-primary" />
-                  </div>
-                  <div className="flex-1">
-                    {renderKPIWithFormatting(kpi)}
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="flex items-center space-x-2 text-muted-foreground">
-              <Circle className="h-4 w-4" />
-              <span className="text-sm">No KPIs defined</span>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-    );
-  };
-
-  const renderSection = (title, items, icon, emptyMessage = "None specified") => (
+  const renderSection = (title, items, icon, emptyMessage = "None specified", useKPIFormatting = false) => (
     <Card className="shadow-sm">
       <CardHeader className="pb-3">
         <CardTitle className="text-lg flex items-center space-x-2">
@@ -280,11 +205,13 @@ const ProcessDetails = ({ processData }) => {
       </CardHeader>
       <CardContent className="pt-0">
         {Array.isArray(items) && items.length > 0 ? (
-          <div className="space-y-2">
+          <div className="space-y-3">
             {items.map((item, index) => (
               <div key={index} className="flex items-start space-x-2">
                 <CheckCircle className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
-                <div className="text-sm flex-1">{renderWithFormatting(item)}</div>
+                <div className="text-sm flex-1">
+                  {useKPIFormatting ? renderKPIWithFormatting(item) : renderWithFormatting(item)}
+                </div>
               </div>
             ))}
           </div>
@@ -298,28 +225,26 @@ const ProcessDetails = ({ processData }) => {
     </Card>
   );
 
-  // Handler for recreating visualization
-  const handleRecreateVisualization = async () => {
-    if (!processData || !processData.id) return;
-    
-    try {
-      const response = await fetch(`/api/processes/${processData.id}/generate-mermaid`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-      
-      if (!response.ok) {
-        throw new Error('Failed to generate new visualization');
-      }
-      
-      return true; // Success
-    } catch (error) {
-      console.error('Error recreating visualization:', error);
-      throw error;
-    }
-  };
+  const renderScopeSection = (title, items, icon, emptyMessage) => (
+    <div>
+      <h4 className="text-sm font-medium text-muted-foreground mb-2 flex items-center space-x-1">
+        {React.createElement(icon, { className: "h-3 w-3" })}
+        <span>{title}:</span>
+      </h4>
+      {Array.isArray(items) && items.length > 0 ? (
+        <div className="space-y-1">
+          {items.map((item, index) => (
+            <div key={index} className="flex items-start space-x-2">
+              <CheckCircle className="h-3 w-3 text-green-500 mt-0.5 flex-shrink-0" />
+              <span className="text-xs text-muted-foreground">{renderWithFormatting(item)}</span>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="text-xs text-muted-foreground italic">{emptyMessage}</p>
+      )}
+    </div>
+  );
 
   const renderProgressTracker = () => (
     <Card className="shadow-sm">
@@ -352,7 +277,6 @@ const ProcessDetails = ({ processData }) => {
           </div>
         </div>
 
-        {/* Missing Documentation Items */}
         {completion.missing.length > 0 ? (
           <div className="space-y-2">
             <h4 className="text-sm font-medium text-muted-foreground">Missing Documentation:</h4>
@@ -372,46 +296,6 @@ const ProcessDetails = ({ processData }) => {
       </CardContent>
     </Card>
   );
-
-  const renderMissingItemsChecklist = () => (
-    <Card className="shadow-sm">
-      <CardHeader className="pb-3">
-        <CardTitle className="text-lg flex items-center space-x-2">
-          <ListTodo className="h-5 w-5 text-primary" />
-          <span>Missing Documentation</span>
-          {completion.missing.length > 0 && (
-            <Badge variant="destructive" className="ml-auto">
-              {completion.missing.length} missing
-            </Badge>
-          )}
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="pt-0">
-        {completion.missing.length > 0 ? (
-          <div className="space-y-2">
-            {completion.missing.map((item, index) => (
-              <div key={index} className="flex items-center space-x-2 p-2 bg-muted/30 rounded-lg border border-dashed">
-                <Circle className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                <span className="text-sm text-muted-foreground">{item.name}</span>
-              </div>
-            ))}
-            <div className="mt-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
-              <p className="text-xs text-blue-700">
-                💡 <strong>Tip:</strong> Use the AI Assistant to help complete these sections by asking specific questions about your process.
-              </p>
-            </div>
-          </div>
-        ) : (
-          <div className="flex items-center space-x-2 text-green-600">
-            <CheckCircle className="h-4 w-4" />
-            <span className="text-sm font-medium">All documentation sections completed!</span>
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
-
-
 
   return (
     <div className="space-y-6 min-w-0 overflow-x-hidden" style={{ marginRight: '-17px', paddingRight: '17px' }}>
@@ -444,42 +328,14 @@ const ProcessDetails = ({ processData }) => {
             </CardTitle>
           </CardHeader>
           <CardContent className="pt-0 space-y-4">
-            {/* Scope Included */}
-            <div>
-              <h4 className="text-sm font-medium text-muted-foreground mb-2">Included:</h4>
-              {Array.isArray(processData.scope_included) && processData.scope_included.length > 0 ? (
-                <div className="space-y-1">
-                  {processData.scope_included.map((item, index) => (
-                    <div key={index} className="flex items-start space-x-2">
-                      <CheckCircle className="h-3 w-3 text-green-500 mt-0.5 flex-shrink-0" />
-                      <span className="text-xs text-muted-foreground">{renderWithFormatting(item)}</span>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-xs text-muted-foreground italic">Not specified</p>
-              )}
-            </div>
-
-            {/* Scope Excluded */}
-            <div>
-              <h4 className="text-sm font-medium text-muted-foreground mb-2">Excluded:</h4>
-              {Array.isArray(processData.scope_excluded) && processData.scope_excluded.length > 0 ? (
-                <div className="space-y-1">
-                  {processData.scope_excluded.map((item, index) => (
-                    <div key={index} className="flex items-start space-x-2">
-                      <Circle className="h-3 w-3 text-red-500 mt-0.5 flex-shrink-0" />
-                      <span className="text-xs text-muted-foreground">{renderWithFormatting(item)}</span>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-xs text-muted-foreground italic">Not specified</p>
-              )}
-            </div>
+            {renderScopeSection("Included", processData.scope_included, CheckCircle, "Not specified")}
+            {renderScopeSection("Excluded", processData.scope_excluded, Circle, "Not specified")}
           </CardContent>
         </Card>
       </div>
+
+      {/* Process Steps */}
+      {renderSection("Process Steps", processData.process_steps, ListTodo, "No steps defined")}
 
       {/* Inputs and Outputs */}
       <div className="grid gap-6 min-w-0">
@@ -487,20 +343,14 @@ const ProcessDetails = ({ processData }) => {
         {renderSection("Outputs", processData.outputs, ArrowRight, "No outputs defined")}
       </div>
 
-      {/* KPIs */}
-      {renderKPIsCard()}
+      {/* KPIs with special formatting */}
+      {renderSection("Key Performance Indicators", processData.kpis, BarChart3, "No KPIs defined", true)}
 
       {/* Roles & Responsibilities */}
       {renderSection("Roles & Responsibilities", processData.roles_responsibilities, Users, "No roles defined")}
 
       {/* Exceptions */}
       {renderSection("Exceptions & Special Cases", processData.exceptions_special_cases, AlertTriangle, "No exceptions defined")}
-
-      {/* Process Flow Visualization - Moved to bottom */}
-      <MermaidVisualization 
-        processData={processData} 
-        onRecreateVisualization={handleRecreateVisualization}
-      />
     </div>
   );
 };

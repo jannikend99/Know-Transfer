@@ -39,13 +39,14 @@ def main():
 
     print("Starting backend server with Uvicorn...")
     
-    # Prepare the uvicorn command
+    # Prepare the uvicorn command - exclude venv to prevent restarts when packages are installed
     uvicorn_cmd = [
         "uvicorn", 
         "backend.main:app", 
         "--host", args.host, 
         "--port", str(args.port),
-        "--reload"  # Enable auto-reload for development
+        "--reload",  # Enable auto-reload for development
+        "--reload-exclude", "backend/venv/*"  # Exclude virtual environment
     ]
     
     if args.https:

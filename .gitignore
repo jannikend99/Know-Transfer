@@ -1,62 +1,170 @@
-# Environment files
-.env
-.venv
-venv/
-env/
+# =============================================================================
+# KNOWLEDGE TRANSFER TOOL - .gitignore
+# =============================================================================
 
-# Dependencies
-node_modules/
+# -----------------------------------------------------------------------------
+# Python Environment & Dependencies
+# -----------------------------------------------------------------------------
+# Virtual environments
+venv/
+.venv/
+env/
+.env/
+ENV/
+env.bak/
+venv.bak/
+knowledge_transfer_tool/backend/venv/
+
+# Python cache and compiled files
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
+*.py[cod]
+*$py.class
+*.so
 .Python
 
-# Build outputs and generated files
+# Distribution / packaging
+.Python
 build/
+develop-eggs/
 dist/
-*.chunk.js
-*.chunk.js.map
-*.chunk.css
-*.chunk.css.map
-static/css/main.*.css
-static/css/main.*.css.map
-static/js/main.*.js
-static/js/main.*.js.LICENSE.txt
-static/js/main.*.js.map
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
 
-# Cache directories
+# -----------------------------------------------------------------------------
+# Node.js & Frontend
+# -----------------------------------------------------------------------------
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+.pnpm-debug.log*
+
+# Frontend build outputs
+knowledge_transfer_tool/frontend/build/
+knowledge_transfer_tool/frontend/dist/
+knowledge_transfer_tool/backend/static/
+
+# Frontend cache
 .cache/
-*.cache
+.parcel-cache/
 .eslintcache
+*.tsbuildinfo
 
-# Certificates and security files
+# -----------------------------------------------------------------------------
+# USER DATA & UPLOADS (NEVER COMMIT THESE!)
+# -----------------------------------------------------------------------------
+# Uploaded files
+uploads/
+knowledge_transfer_tool/uploads/
+*/uploads/
+
+# Vector store data (contains processed user documents)
+vector_store/
+vectorstore/
+knowledge_transfer_tool/vector_store/
+knowledge_transfer_tool/vectorstore/
+*/vector_store/
+*/vectorstore/
+
+# Database files (contain user data)
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+*.sqlite-journal
+knowledge_transfer.db
+knowledge_transfer_tool/knowledge_transfer.db
+
+# -----------------------------------------------------------------------------
+# CERTIFICATES & SECURITY
+# -----------------------------------------------------------------------------
 certs/
+knowledge_transfer_tool/certs/
 *.pem
 *.key
 *.crt
 *.cert
+*.p12
+*.pfx
 
-# Database files
-*.db
-*.sqlite
-*.sqlite3
-*.db
+# Environment variables (may contain API keys)
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
 
+# -----------------------------------------------------------------------------
+# LOGS & TEMPORARY FILES
+# -----------------------------------------------------------------------------
+# Log files
+*.log
+logs/
+*.log.*
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
-# Upload and data directories
-#uploads/
-#vector_store/
-data/
-
-# IDE and editor files
-.vscode/
-.idea/
+# Temporary files
+tmp/
+temp/
+.tmp/
+.temp/
+*.tmp
+*.temp
 *.swp
 *.swo
 *~
 
-# OS generated files
+# -----------------------------------------------------------------------------
+# IDE & EDITOR FILES
+# -----------------------------------------------------------------------------
+# VSCode
+.vscode/
+*.code-workspace
+
+# JetBrains IDEs
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# Vim
+*.swp
+*.swo
+*~
+
+# Emacs
+*~
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+*.elc
+auto-save-list
+tramp
+.\#*
+
+# -----------------------------------------------------------------------------
+# OPERATING SYSTEM FILES
+# -----------------------------------------------------------------------------
+# macOS
 .DS_Store
 .DS_Store?
 ._*
@@ -65,35 +173,77 @@ data/
 ehthumbs.db
 Thumbs.db
 
-# Logs
-*.log
-logs/
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.cab
+*.msi
+*.msix
+*.msm
+*.msp
+*.lnk
 
-# Todo and temporary files
+# Linux
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+.nfs*
+
+# -----------------------------------------------------------------------------
+# DEVELOPMENT & TESTING
+# -----------------------------------------------------------------------------
+# Testing
+.coverage
+.pytest_cache/
+.tox/
+.nox/
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# pyenv
+.python-version
+
+# pipenv
+Pipfile.lock
+
+# PEP 582
+__pypackages__/
+
+# -----------------------------------------------------------------------------
+# BACKUP & ARCHIVE FILES
+# -----------------------------------------------------------------------------
+*.bak
+*.backup
+*.old
+*.orig
+*.save
+*.tar
+*.tar.gz
+*.zip
+*.rar
+*.7z
+
+# -----------------------------------------------------------------------------
+# PROJECT SPECIFIC
+# -----------------------------------------------------------------------------
+# Todo and notes (personal files)
 todo.txt
-temp/
-tmp/
+TODO.md
+notes.txt
+NOTES.md
 
-# Frontend specific
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
+# Test data directories
+test_data/
+sample_data/
 
-
-
-
-
-
-# Node.js cache files
-node_modules/.cache/
-**/node_modules/.cache/
-*.pack
-
-# Additional large files to ignore
-**/*.pack
-
-# Data directories - not needed in git
-knowledge_transfer_tool/uploads/
-knowledge_transfer_tool/vector_store/
-uploads/
-vector_store/
+# Documentation builds
+docs/_build/
+site/
