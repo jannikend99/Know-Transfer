@@ -63,17 +63,33 @@ async def transcribe_audio_with_whisper(audio_file_path: str, model="whisper-1")
         return "Error: Audio file is too large (maximum 25MB)."
     
     try:
+        import asyncio
+        
         # Get file extension to provide better error messages
         file_ext = os.path.splitext(audio_file_path)[1].lower()
         print(f"Transcribing audio file: {audio_file_path} (size: {file_size} bytes, type: {file_ext})")
         
-        with open(audio_file_path, "rb") as audio_file:
-            transcript = current_client.audio.transcriptions.create(
-                model=model,
-                file=audio_file,
-                response_format="text"
-            )
+        # Add timeout protection for transcription API call
+        timeout_seconds = 60  # Whisper can take longer, so allow up to 60 seconds
+        
+        def sync_transcribe():
+            with open(audio_file_path, "rb") as audio_file:
+                return current_client.audio.transcriptions.create(
+                    model=model,
+                    file=audio_file,
+                    response_format="text"
+                )
+        
+        # Run the synchronous transcription with timeout
+        transcript = await asyncio.wait_for(
+            asyncio.get_event_loop().run_in_executor(None, sync_transcribe),
+            timeout=timeout_seconds
+        )
         return transcript
+        
+    except asyncio.TimeoutError:
+        print(f"Timeout error: Audio transcription took longer than 60 seconds")
+        return "Error: Audio transcription timed out. Please try with a shorter audio file."
         
     except Exception as e:
         error_msg = str(e)

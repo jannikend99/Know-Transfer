@@ -29,7 +29,8 @@ from ..services.langchain_service import (
     generate_basic_mermaid_from_steps,
     generate_reactflow_from_process_data,
     generate_basic_reactflow_from_steps,
-    assess_process_documentation_progress
+    assess_process_documentation_progress,
+    auto_regenerate_visualizations_if_needed
 )
 from ..services.document_service import extract_text_from_file, SUPPORTED_MIME_TYPES
 
@@ -63,25 +64,54 @@ def read_process(process_id: str, db: Session = Depends(get_db)):
     return db_process
 
 @router.put("/processes/{process_id}", response_model=schemas.Process)
-def update_process(process_id: str, process: schemas.ProcessUpdate, db: Session = Depends(get_db)):
+async def update_process(process_id: str, process: schemas.ProcessUpdate, db: Session = Depends(get_db)):
     db_process = db.query(models.Process).filter(models.Process.id == process_id).first()
     if db_process is None:
         raise HTTPException(status_code=404, detail="Process not found")
     
     try:
-        update_data = process.dict(exclude_unset=True)
+        # Capture old data for comparison
+        old_data = {
+            'title': db_process.title,
+            'general_description': db_process.general_description,
+            'process_steps': db_process.process_steps or [],
+            'scope_included': db_process.scope_included or [],
+            'scope_excluded': db_process.scope_excluded or [],
+            'inputs': db_process.inputs or [],
+            'outputs': db_process.outputs or [],
+            'kpis': db_process.kpis or [],
+            'roles_responsibilities': db_process.roles_responsibilities or [],
+            'exceptions_special_cases': db_process.exceptions_special_cases or []
+        }
         
-        # Check if process_steps or other structure-related fields are being updated
-        structure_fields = ['process_steps', 'scope_included', 'scope_excluded', 'inputs', 'outputs', 'roles_responsibilities', 'exceptions_special_cases']
-        structure_updated = any(field in update_data for field in structure_fields)
+        update_data = process.dict(exclude_unset=True)
         
         for key, value in update_data.items():
             setattr(db_process, key, value)
         
-        # Clear cached React Flow data if structure changed
-        if structure_updated:
-            print(f"Process structure updated, clearing cached React Flow data for process {process_id}")
-            db_process.reactflow_data = None
+        # Prepare new data for comparison
+        new_data = {
+            'title': db_process.title,
+            'general_description': db_process.general_description,
+            'process_steps': db_process.process_steps or [],
+            'scope_included': db_process.scope_included or [],
+            'scope_excluded': db_process.scope_excluded or [],
+            'inputs': db_process.inputs or [],
+            'outputs': db_process.outputs or [],
+            'kpis': db_process.kpis or [],
+            'roles_responsibilities': db_process.roles_responsibilities or [],
+            'exceptions_special_cases': db_process.exceptions_special_cases or []
+        }
+        
+        # Auto-regenerate visualizations if needed
+        regeneration_results = await auto_regenerate_visualizations_if_needed(
+            process_id, old_data, new_data, db_process
+        )
+        
+        if regeneration_results['regeneration_needed']:
+            print(f"📊 Visualization auto-regeneration for process {process_id}: {regeneration_results['reason']}")
+            if regeneration_results['error']:
+                print(f"⚠️ Regeneration error: {regeneration_results['error']}")
         
         db.add(db_process)
         db.commit()
@@ -151,6 +181,45 @@ async def upload_file_for_process(process_id: str, file: UploadFile = File(...),
                 print(f"Updated user message with transcription: '{transcript_text[:50]}...' for process {process_id}")
                 
                 text_content_for_vector_store = transcript_text
+                
+                # EXTRACT STRUCTURED DATA FROM VOICE TRANSCRIPT (with error handling and timeout protection)
+                extracted_data_from_voice = None
+                try:
+                    print(f"Attempting structured extraction from voice transcript for process {process_id}")
+                    extracted_data_from_voice = await extract_process_from_text(transcript_text)
+                    
+                    if extracted_data_from_voice:
+                        print(f"✅ Extracted structured data from voice transcript: {extracted_data_from_voice.model_dump(exclude_none=True)}")
+                        
+                        # Update process with extracted data from voice transcript
+                        for key, value in extracted_data_from_voice.model_dump(exclude_none=True).items():
+                            if hasattr(db_process, key):
+                                current_db_value = getattr(db_process, key)
+                                # Special handling for list fields: append new unique items
+                                if isinstance(value, list) and isinstance(current_db_value, list):
+                                    new_items = [item for item in value if item not in current_db_value]
+                                    if new_items:
+                                        setattr(db_process, key, current_db_value + new_items)
+                                # For non-list fields, or if db field is not a list, overwrite if new value is provided
+                                elif value is not None: 
+                                    setattr(db_process, key, value)
+                        
+                        # Commit immediately after extraction to avoid losing data
+                        db.commit()
+                        db.refresh(db_process)
+                        print(f"✅ Process data updated from voice transcript for process {process_id}")
+                        
+                        # NOTE: Auto-regeneration is intentionally REMOVED from voice processing 
+                        # to prevent hanging. Visualizations will regenerate on next page load or manual trigger.
+                        print(f"📊 Voice processing complete. Visualizations will regenerate automatically on next view.")
+                        
+                    else:
+                        print(f"ℹ️ No structured data extracted from voice transcript for process {process_id}")
+                        
+                except Exception as e:
+                    print(f"⚠️ Error during voice transcript structured extraction for process {process_id}: {e}")
+                    # Continue processing even if extraction fails
+                    extracted_data_from_voice = None
                 
                 # Check current completion status and generate dynamic response
                 current_process_data = {
@@ -235,6 +304,20 @@ async def upload_file_for_process(process_id: str, file: UploadFile = File(...),
                 
                 # Update the process with extracted data if any was found
                 if structured_data_from_doc_model:
+                    # Capture old data for auto-regeneration comparison
+                    old_data = {
+                        'title': db_process.title,
+                        'general_description': db_process.general_description,
+                        'process_steps': db_process.process_steps or [],
+                        'scope_included': db_process.scope_included or [],
+                        'scope_excluded': db_process.scope_excluded or [],
+                        'inputs': db_process.inputs or [],
+                        'outputs': db_process.outputs or [],
+                        'kpis': db_process.kpis or [],
+                        'roles_responsibilities': db_process.roles_responsibilities or [],
+                        'exceptions_special_cases': db_process.exceptions_special_cases or []
+                    }
+                    
                     for key, value in structured_data_from_doc_model.model_dump(exclude_none=True).items():
                         if hasattr(db_process, key):
                             if isinstance(value, list) and isinstance(getattr(db_process, key), list):
@@ -244,6 +327,29 @@ async def upload_file_for_process(process_id: str, file: UploadFile = File(...),
                                    setattr(db_process, key, current_list + new_items)
                             elif value is not None: 
                                 setattr(db_process, key, value)
+                    
+                    # Prepare new data for comparison
+                    new_data = {
+                        'title': db_process.title,
+                        'general_description': db_process.general_description,
+                        'process_steps': db_process.process_steps or [],
+                        'scope_included': db_process.scope_included or [],
+                        'scope_excluded': db_process.scope_excluded or [],
+                        'inputs': db_process.inputs or [],
+                        'outputs': db_process.outputs or [],
+                        'kpis': db_process.kpis or [],
+                        'roles_responsibilities': db_process.roles_responsibilities or [],
+                        'exceptions_special_cases': db_process.exceptions_special_cases or []
+                    }
+                    
+                    # Auto-regenerate visualizations if needed
+                    regeneration_results = await auto_regenerate_visualizations_if_needed(
+                        process_id, old_data, new_data, db_process
+                    )
+                    
+                    if regeneration_results['regeneration_needed']:
+                        print(f"📊 Document-upload triggered visualization auto-regeneration for process {process_id}: {regeneration_results['reason']}")
+                    
                     db.commit()
                     db.refresh(db_process)
                 
@@ -345,6 +451,15 @@ async def upload_file_for_process(process_id: str, file: UploadFile = File(...),
     finally:
         await file.close()
     
+    # Determine which extracted data to return (voice transcript or document)
+    extracted_process_data_to_return = None
+    if file.content_type and file.content_type.startswith("audio/"):
+        # For voice files, return the extracted data from the transcript
+        extracted_process_data_to_return = locals().get('extracted_data_from_voice', None)
+    else:
+        # For documents, return the extracted data from document text
+        extracted_process_data_to_return = structured_data_from_doc_model
+    
     return schemas.FileUploadResponse(
         filename=file.filename, 
         location=file_location, 
@@ -352,7 +467,7 @@ async def upload_file_for_process(process_id: str, file: UploadFile = File(...),
         message="File uploaded and processed",
         transcript=transcript_text,
         extracted_text_snippet=extracted_doc_text[:500] + ("..." if extracted_doc_text and len(extracted_doc_text) > 500 else "") if extracted_doc_text else None,
-        extracted_process_data=structured_data_from_doc_model,
+        extracted_process_data=extracted_process_data_to_return,
         vector_store_status="Content added to vector store" if added_to_vector_store else "Failed or not applicable",
         ai_response=ai_response_text  # Include AI response for frontend
     )
@@ -516,6 +631,20 @@ You can communicate through text, voice messages, or document uploads. What woul
     db.commit() # Commit both messages
     db.refresh(db_ai_chat_message)   # Optional
 
+    # Capture old data for auto-regeneration comparison
+    old_data = {
+        'title': db_process.title,
+        'general_description': db_process.general_description,
+        'process_steps': db_process.process_steps or [],
+        'scope_included': db_process.scope_included or [],
+        'scope_excluded': db_process.scope_excluded or [],
+        'inputs': db_process.inputs or [],
+        'outputs': db_process.outputs or [],
+        'kpis': db_process.kpis or [],
+        'roles_responsibilities': db_process.roles_responsibilities or [],
+        'exceptions_special_cases': db_process.exceptions_special_cases or []
+    }
+    
     # Update process with extracted data from user message
     if extracted_data_model:
         print(f"Extracted structured data from user message: {extracted_data_model.model_dump(exclude_none=True)}")
@@ -549,8 +678,30 @@ You can communicate through text, voice messages, or document uploads. What woul
                     elif value is not None: 
                         setattr(db_process, key, value)
     
-    # Commit any process updates
+    # Handle auto-regeneration if process data was updated
     if extracted_data_model or ai_generated_data:
+        # Prepare new data for comparison
+        new_data = {
+            'title': db_process.title,
+            'general_description': db_process.general_description,
+            'process_steps': db_process.process_steps or [],
+            'scope_included': db_process.scope_included or [],
+            'scope_excluded': db_process.scope_excluded or [],
+            'inputs': db_process.inputs or [],
+            'outputs': db_process.outputs or [],
+            'kpis': db_process.kpis or [],
+            'roles_responsibilities': db_process.roles_responsibilities or [],
+            'exceptions_special_cases': db_process.exceptions_special_cases or []
+        }
+        
+        # Auto-regenerate visualizations if needed
+        regeneration_results = await auto_regenerate_visualizations_if_needed(
+            process_id, old_data, new_data, db_process
+        )
+        
+        if regeneration_results['regeneration_needed']:
+            print(f"📊 Chat-triggered visualization auto-regeneration for process {process_id}: {regeneration_results['reason']}")
+        
         db.add(db_process) # Add db_process again to mark it as dirty for commit
         db.commit()        # Commit changes to the db_process
         db.refresh(db_process) # Refresh to get updated data if needed elsewhere

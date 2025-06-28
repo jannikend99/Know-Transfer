@@ -313,9 +313,20 @@ async def extract_process_from_text(text_content: str) -> Optional[ProcessBase]:
         return None
 
     try:
-        # The PydanticOutputParser is now part of the chain, so invoke should return the parsed object.
-        parsed_output = await chain.ainvoke({"text_to_parse": text_content})
+        # Add timeout protection to prevent hanging on LLM calls
+        import asyncio
+        
+        # Set a reasonable timeout (30 seconds) for the extraction
+        timeout_seconds = 30
+        
+        parsed_output = await asyncio.wait_for(
+            chain.ainvoke({"text_to_parse": text_content}),
+            timeout=timeout_seconds
+        )
         return parsed_output
+    except asyncio.TimeoutError:
+        print(f"Timeout error: Process extraction took longer than {timeout_seconds} seconds")
+        return None
     except Exception as e:
         # This can include OutputParserException if the LLM doesn't format well,
         # or other errors during chain execution.
@@ -420,12 +431,28 @@ async def query_document_store(query_text: str, process_id: str):
 
 # --- Mermaid Visualization Generation ---
 async def generate_mermaid_from_process_data(process_data: dict) -> str:
-    """Generate Mermaid diagram code from process data using AI."""
-    if not llm:
-        print("LLM not initialized, cannot generate Mermaid visualization.")
+    """Generate Mermaid diagram code from process data using AI, with readiness check."""
+    
+    # Assess visualization readiness first
+    readiness = assess_visualization_readiness(process_data)
+    
+    # Return appropriate placeholder if not ready for full visualization
+    if readiness['readiness_level'] == "PLACEHOLDER_ONLY":
+        return generate_visualization_placeholder(readiness, "mermaid")
+    
+    # For simple visualization, use basic generation
+    if readiness['readiness_level'] == "SIMPLE_VISUALIZATION":
         return generate_basic_mermaid_from_steps(process_data.get('process_steps', []))
     
-    # Prepare process data for the prompt
+    # For basic or full visualization, proceed with AI generation if available
+    if not llm:
+        print("LLM not initialized, cannot generate Mermaid visualization.")
+        if readiness['can_generate_visualization']:
+            return generate_basic_mermaid_from_steps(process_data.get('process_steps', []))
+        else:
+            return generate_visualization_placeholder(readiness, "mermaid")
+
+    # Prepare process data for the prompt (only if AI generation is appropriate)
     process_context = f"""
 Process Title: {process_data.get('title', 'Untitled Process')}
 General Description: {process_data.get('general_description', 'No description available')}
@@ -534,7 +561,10 @@ Focus primarily on the Process Steps section and create a clear sequential flow.
     except Exception as e:
         print(f"Error generating Mermaid visualization with AI: {e}")
         # Fallback to basic generation
-        return generate_basic_mermaid_from_steps(process_data.get('process_steps', []))
+        if readiness['can_generate_visualization']:
+            return generate_basic_mermaid_from_steps(process_data.get('process_steps', []))
+        else:
+            return generate_visualization_placeholder(readiness, "mermaid")
 
 def clean_text_for_mermaid(text: str) -> str:
     """Clean text to be safe for Mermaid node labels."""
@@ -845,12 +875,28 @@ FOCUS: {progress['focus_message']}
         print(f"Error running RAG chat chain: {e}")
         return f"Error in LangChain RAG chat: {e}"
 
-# --- React Flow Visualization Generation ---
+# --- Enhanced React Flow Visualization Generation ---
 async def generate_reactflow_from_process_data(process_data: dict) -> dict:
-    """Generate React Flow nodes and edges from process data using AI."""
+    """Generate React Flow nodes and edges from process data using AI, with readiness check."""
+    
+    # Assess visualization readiness first
+    readiness = assess_visualization_readiness(process_data)
+    
+    # Return appropriate placeholder if not ready for full visualization
+    if readiness['readiness_level'] == "PLACEHOLDER_ONLY":
+        return generate_visualization_placeholder(readiness, "reactflow")
+    
+    # For simple visualization, use basic generation
+    if readiness['readiness_level'] == "SIMPLE_VISUALIZATION":
+        return generate_basic_reactflow_from_steps(process_data.get('process_steps', []))
+    
+    # For basic or full visualization, proceed with AI generation if available
     if not llm:
         print("LLM not initialized, cannot generate React Flow visualization.")
-        return generate_basic_reactflow_from_steps(process_data.get('process_steps', []))
+        if readiness['can_generate_visualization']:
+            return generate_basic_reactflow_from_steps(process_data.get('process_steps', []))
+        else:
+            return generate_visualization_placeholder(readiness, "reactflow")
     
     # Prepare process data for the prompt
     process_context = f"""
@@ -1434,4 +1480,351 @@ def generate_basic_reactflow_from_steps(process_steps: list) -> dict:
     
     return {"nodes": nodes, "edges": edges}
 
-print("LangChain service module loaded - with vector store capabilities.") 
+print("LangChain service module loaded - with vector store capabilities.")
+
+def assess_visualization_readiness(process_data: dict) -> dict:
+    """
+    Determines if there's sufficient information to generate meaningful visualizations.
+    Returns assessment including readiness level and recommendations.
+    """
+    # Essential information for meaningful visualizations
+    has_title = bool(process_data.get('title', '').strip())
+    has_description = bool(process_data.get('general_description', '').strip())
+    process_steps = process_data.get('process_steps', [])
+    has_meaningful_steps = bool(process_steps and len(process_steps) >= 2)
+    
+    # Calculate step quality (steps with substantial content)
+    substantial_steps = 0
+    if process_steps:
+        for step in process_steps:
+            if isinstance(step, str) and len(step.strip()) >= 20:
+                substantial_steps += 1
+    
+    # Supporting information that enhances visualizations
+    has_inputs = bool(process_data.get('inputs', []))
+    has_outputs = bool(process_data.get('outputs', []))
+    has_roles = bool(process_data.get('roles_responsibilities', []))
+    has_exceptions = bool(process_data.get('exceptions_special_cases', []))
+    
+    # Determine readiness level
+    essential_score = 0
+    if has_title: essential_score += 1
+    if has_description: essential_score += 2
+    if has_meaningful_steps: essential_score += 3
+    if substantial_steps >= 3: essential_score += 2
+    
+    enhancement_score = 0
+    if has_inputs: enhancement_score += 1
+    if has_outputs: enhancement_score += 1
+    if has_roles: enhancement_score += 1
+    if has_exceptions: enhancement_score += 1
+    
+    total_score = essential_score + enhancement_score
+    
+    # Determine visualization strategy
+    if essential_score >= 6 and substantial_steps >= 3:
+        readiness_level = "FULL_VISUALIZATION"
+        strategy = "Generate detailed AI-powered visualization with all features"
+    elif essential_score >= 4 and has_meaningful_steps:
+        readiness_level = "BASIC_VISUALIZATION" 
+        strategy = "Generate basic flowchart from available steps"
+    elif has_meaningful_steps:
+        readiness_level = "SIMPLE_VISUALIZATION"
+        strategy = "Generate simple step-by-step diagram"
+    else:
+        readiness_level = "PLACEHOLDER_ONLY"
+        strategy = "Show informative placeholder with guidance"
+    
+    # Missing elements for better visualizations
+    missing_elements = []
+    if not has_title:
+        missing_elements.append("Process title")
+    if not has_description:
+        missing_elements.append("Process description")
+    if not has_meaningful_steps:
+        missing_elements.append("At least 2 process steps")
+    if substantial_steps < 3:
+        missing_elements.append("More detailed step descriptions")
+    
+    return {
+        'readiness_level': readiness_level,
+        'strategy': strategy,
+        'essential_score': essential_score,
+        'enhancement_score': enhancement_score,
+        'total_score': total_score,
+        'has_meaningful_steps': has_meaningful_steps,
+        'substantial_steps_count': substantial_steps,
+        'total_steps_count': len(process_steps) if process_steps else 0,
+        'missing_elements': missing_elements,
+        'can_generate_visualization': readiness_level != "PLACEHOLDER_ONLY",
+        'should_use_ai_generation': readiness_level == "FULL_VISUALIZATION",
+        'placeholder_message': f"Need {', '.join(missing_elements)} for meaningful visualization" if missing_elements else "Ready for visualization"
+    }
+
+def generate_visualization_placeholder(readiness_assessment: dict, visualization_type: str = "process") -> str:
+    """Generate informative placeholder content based on readiness assessment."""
+    
+    if visualization_type == "mermaid":
+        if readiness_assessment['readiness_level'] == "PLACEHOLDER_ONLY":
+            return """graph TD
+    Start(("🚀 START")) --> Gather
+    Gather["📝 Gather Process Information"] --> Steps
+    Steps["➡️ Define Process Steps"] --> Visualize
+    Visualize["📊 Generate Visualization"] --> End
+    End(("✨ END"))
+    
+    %% Placeholder styling
+    style Start fill:#e0f2fe,stroke:#0284c7,stroke-width:2px
+    style Gather fill:#fef3c7,stroke:#f59e0b,stroke-width:2px
+    style Steps fill:#fef3c7,stroke:#f59e0b,stroke-width:2px
+    style Visualize fill:#dcfce7,stroke:#16a34a,stroke-width:2px
+    style End fill:#e0f2fe,stroke:#0284c7,stroke-width:2px
+    
+    %% Add informative text
+    classDef infoText fill:#f9f9f9,stroke:#666,stroke-width:1px,font-size:12px
+    
+    Info1["ℹ️ Add process steps through AI chat"]
+    Info2["💡 Upload documents for auto-extraction"] 
+    Info3["🎯 Define inputs, outputs, and roles"]
+    
+    Gather -.-> Info1
+    Steps -.-> Info2
+    Visualize -.-> Info3
+    
+    class Info1,Info2,Info3 infoText"""
+        else:
+            # For other levels, return basic structure to be filled
+            return generate_basic_mermaid_from_steps(readiness_assessment.get('process_steps', []))
+    
+    elif visualization_type == "reactflow":
+        if readiness_assessment['readiness_level'] == "PLACEHOLDER_ONLY":
+            return {
+                "nodes": [
+                    {
+                        "id": "start",
+                        "type": "startEnd",
+                        "position": {"x": 400, "y": 50},
+                        "data": {"label": "🚀 START", "description": "Begin by documenting your process", "isStart": True}
+                    },
+                    {
+                        "id": "gather",
+                        "type": "process", 
+                        "position": {"x": 300, "y": 150},
+                        "data": {"label": "📝 Gather Information", "description": "Use AI chat to document process details"}
+                    },
+                    {
+                        "id": "steps",
+                        "type": "process",
+                        "position": {"x": 500, "y": 150}, 
+                        "data": {"label": "➡️ Define Steps", "description": "Upload documents or describe your process"}
+                    },
+                    {
+                        "id": "enhance",
+                        "type": "process",
+                        "position": {"x": 400, "y": 250},
+                        "data": {"label": "🎯 Add Details", "description": "Include inputs, outputs, roles & responsibilities"}
+                    },
+                    {
+                        "id": "visualize",
+                        "type": "process",
+                        "position": {"x": 400, "y": 350},
+                        "data": {"label": "📊 Auto-Generate", "description": "Visualization will appear automatically"}
+                    },
+                    {
+                        "id": "end",
+                        "type": "startEnd",
+                        "position": {"x": 400, "y": 450},
+                        "data": {"label": "✨ COMPLETE", "description": "Interactive process visualization ready", "isStart": False}
+                    }
+                ],
+                "edges": [
+                    {"id": "e1", "source": "start", "target": "gather", "type": "smoothstep", "markerEnd": {"type": "ArrowClosed"}},
+                    {"id": "e2", "source": "start", "target": "steps", "type": "smoothstep", "markerEnd": {"type": "ArrowClosed"}},
+                    {"id": "e3", "source": "gather", "target": "enhance", "type": "smoothstep", "markerEnd": {"type": "ArrowClosed"}},
+                    {"id": "e4", "source": "steps", "target": "enhance", "type": "smoothstep", "markerEnd": {"type": "ArrowClosed"}},
+                    {"id": "e5", "source": "enhance", "target": "visualize", "type": "smoothstep", "markerEnd": {"type": "ArrowClosed"}},
+                    {"id": "e6", "source": "visualize", "target": "end", "type": "smoothstep", "markerEnd": {"type": "ArrowClosed"}}
+                ]
+            }
+    
+    # Default HTML placeholder
+    missing_info = readiness_assessment.get('missing_elements', [])
+    placeholder_html = f"""<!DOCTYPE html>
+<html>
+<head>
+    <title>Process Visualization Placeholder</title>
+    <style>
+        body {{ 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            margin: 0; padding: 40px; 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }}
+        .placeholder-container {{ 
+            background: white;
+            border-radius: 16px;
+            padding: 40px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            max-width: 600px;
+            text-align: center;
+        }}
+        .icon {{ font-size: 4rem; margin-bottom: 20px; }}
+        h1 {{ color: #1f2937; margin-bottom: 16px; }}
+        .subtitle {{ color: #6b7280; font-size: 1.1rem; margin-bottom: 30px; }}
+        .missing-list {{ 
+            background: #fef3c7; 
+            border: 1px solid #f59e0b; 
+            border-radius: 8px; 
+            padding: 20px; 
+            margin: 20px 0;
+            text-align: left;
+        }}
+        .missing-list h3 {{ color: #d97706; margin-top: 0; }}
+        .missing-item {{ 
+            display: flex; 
+            align-items: center; 
+            margin: 8px 0; 
+            color: #92400e;
+        }}
+        .checkmark {{ color: #10b981; margin-right: 8px; }}
+        .guidance {{ 
+            background: #eff6ff; 
+            border: 1px solid #3b82f6; 
+            border-radius: 8px; 
+            padding: 20px; 
+            margin-top: 20px;
+        }}
+        .guidance h3 {{ color: #1e40af; margin-top: 0; }}
+        .guidance-item {{ margin: 8px 0; color: #1e3a8a; }}
+    </style>
+</head>
+<body>
+    <div class="placeholder-container">
+        <div class="icon">📊</div>
+        <h1>Process Visualization</h1>
+        <p class="subtitle">Interactive visualization will appear here once you provide process information</p>
+        
+        <div class="missing-list">
+            <h3>🎯 Information Needed:</h3>
+            {chr(10).join([f'<div class="missing-item">• {item}</div>' for item in missing_info])}
+        </div>
+        
+        <div class="guidance">
+            <h3>💡 How to Get Started:</h3>
+            <div class="guidance-item">💬 <strong>Use AI Chat:</strong> Describe your process step-by-step</div>
+            <div class="guidance-item">📄 <strong>Upload Documents:</strong> PDF/Word files for automatic extraction</div>
+            <div class="guidance-item">🎙️ <strong>Voice Input:</strong> Record voice messages describing your process</div>
+            <div class="guidance-item">✨ <strong>Auto-Generation:</strong> Visualization updates automatically as you add information</div>
+        </div>
+    </div>
+</body>
+</html>"""
+    
+    return placeholder_html 
+
+def should_regenerate_visualizations(old_data: dict, new_data: dict) -> dict:
+    """
+    Determines if changes to process data warrant regenerating visualizations.
+    Returns information about what should be regenerated and why.
+    """
+    
+    # Fields that significantly impact visualization structure
+    critical_fields = ['process_steps', 'general_description']
+    
+    # Fields that enhance visualizations but don't require full regeneration
+    enhancement_fields = ['inputs', 'outputs', 'roles_responsibilities', 'exceptions_special_cases']
+    
+    # Check for critical changes
+    critical_changes = []
+    for field in critical_fields:
+        old_value = old_data.get(field, []) if isinstance(old_data.get(field), list) else old_data.get(field, '')
+        new_value = new_data.get(field, []) if isinstance(new_data.get(field), list) else new_data.get(field, '')
+        
+        if old_value != new_value:
+            critical_changes.append(field)
+    
+    # Check for enhancement changes
+    enhancement_changes = []
+    for field in enhancement_fields:
+        old_value = old_data.get(field, []) if isinstance(old_data.get(field), list) else old_data.get(field, '')
+        new_value = new_data.get(field, []) if isinstance(new_data.get(field), list) else new_data.get(field, '')
+        
+        if old_value != new_value:
+            enhancement_changes.append(field)
+    
+    # Assess readiness change
+    old_readiness = assess_visualization_readiness(old_data)
+    new_readiness = assess_visualization_readiness(new_data)
+    
+    readiness_improved = (
+        new_readiness['readiness_level'] != old_readiness['readiness_level'] or
+        new_readiness['can_generate_visualization'] != old_readiness['can_generate_visualization']
+    )
+    
+    # Determine regeneration strategy
+    should_regenerate = bool(critical_changes or readiness_improved)
+    regeneration_priority = "HIGH" if critical_changes else ("MEDIUM" if readiness_improved else "LOW")
+    
+    # Only regenerate if it makes sense
+    if new_readiness['readiness_level'] == "PLACEHOLDER_ONLY" and old_readiness['readiness_level'] == "PLACEHOLDER_ONLY":
+        should_regenerate = False
+        regeneration_priority = "NONE"
+    
+    return {
+        'should_regenerate': should_regenerate,
+        'priority': regeneration_priority,
+        'critical_changes': critical_changes,
+        'enhancement_changes': enhancement_changes,
+        'readiness_improved': readiness_improved,
+        'old_readiness_level': old_readiness['readiness_level'],
+        'new_readiness_level': new_readiness['readiness_level'],
+        'reason': f"{'Critical changes: ' + ', '.join(critical_changes) if critical_changes else ''}{'Readiness improved' if readiness_improved else ''}".strip()
+    }
+
+async def auto_regenerate_visualizations_if_needed(process_id: str, old_data: dict, new_data: dict, db_process) -> dict:
+    """
+    Automatically regenerates visualizations if process data changes warrant it.
+    Returns information about what was regenerated.
+    """
+    
+    regeneration_info = should_regenerate_visualizations(old_data, new_data)
+    results = {
+        'regeneration_needed': regeneration_info['should_regenerate'],
+        'priority': regeneration_info['priority'],
+        'reason': regeneration_info['reason'],
+        'reactflow_regenerated': False,
+        'mermaid_regenerated': False,
+        'error': None
+    }
+    
+    if not regeneration_info['should_regenerate']:
+        return results
+    
+    try:
+        print(f"Auto-regenerating visualizations for process {process_id}: {regeneration_info['reason']}")
+        
+        # Regenerate ReactFlow data (higher priority)
+        if regeneration_info['priority'] in ['HIGH', 'MEDIUM']:
+            try:
+                new_reactflow_data = await generate_reactflow_from_process_data(new_data)
+                if new_reactflow_data:
+                    db_process.reactflow_data = new_reactflow_data
+                    results['reactflow_regenerated'] = True
+                    print(f"✅ ReactFlow visualization regenerated for process {process_id}")
+            except Exception as e:
+                print(f"❌ Error regenerating ReactFlow for process {process_id}: {e}")
+                results['error'] = f"ReactFlow: {str(e)}"
+        
+        # Note: Mermaid regeneration is handled on-demand since it's not cached in DB
+        # The updated generate_mermaid_from_process_data will automatically use new data
+        results['mermaid_regenerated'] = True  # Will regenerate on next request
+        
+        return results
+        
+    except Exception as e:
+        print(f"❌ Error in auto-regeneration for process {process_id}: {e}")
+        results['error'] = str(e)
+        return results
