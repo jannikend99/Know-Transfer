@@ -200,24 +200,31 @@ npm run build
 ```
 Know-Transfer/
 ├── run.py                          # Main application launcher
+├── generate_cert.py                # Manual SSL certificate generator
 ├── knowledge_transfer_tool/
-│   ├── backend/                    # FastAPI backend
+│   ├── backend/                    # FastAPI backend application
 │   │   ├── main.py                 # FastAPI app entry point
-│   │   ├── database.py             # Database configuration
-│   │   ├── models/                 # SQLAlchemy models
-│   │   ├── routers/                # API route handlers
-│   │   ├── schemas/                # Pydantic schemas
-│   │   ├── services/               # Business logic services
-│   │   ├── static/                 # Built frontend files (auto-generated)
-│   │   └── requirements.txt        # Python dependencies
-│   └── frontend/                   # React frontend
-│       ├── src/
-│       │   ├── components/         # React components
-│       │   ├── styles/             # CSS stylesheets
-│       │   └── lib/                # Utility functions
-│       ├── public/                 # Static assets
-│       ├── package.json            # Node.js dependencies
-│       └── build.sh                # Frontend build script
+│   │   ├── database.py             # Database session and engine setup
+│   │   ├── database_migration.py   # Alembic script for DB migrations
+│   │   ├── models/                 # SQLAlchemy ORM models
+│   │   ├── routers/                # API endpoint routers
+│   │   ├── schemas/                # Pydantic data validation schemas
+│   │   ├── services/               # Business logic and service layer
+│   │   ├── static/                 # Served static files (contains built frontend)
+│   │   └── requirements.txt        # Python dependencies for the backend
+│   ├── frontend/                   # React.js frontend application
+│   │   ├── src/
+│   │   │   ├── App.js              # Main React app component
+│   │   │   ├── components/         # Reusable React components
+│   │   │   ├── styles/             # CSS and styling files
+│   │   │   └── index.js            # Frontend application entry point
+│   │   ├── public/                 # Public assets for the frontend
+│   │   ├── build.sh                # Script to build the frontend
+│   │   └── package.json            # Node.js dependencies for the frontend
+│   ├── certs/                      # Directory for SSL certificates
+│   ├── uploads/                    # Directory for user-uploaded files
+│   ├── vector_store/               # Directory for ChromaDB vector storage
+│   └── requirements.txt            # Root-level Python dependencies
 └── README.md                       # This file
 ```
 
