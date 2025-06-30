@@ -1,5 +1,5 @@
 import React from 'react';
-import { Handle, Position } from '@reactflow/core';
+import { Handle, Position } from 'reactflow';
 import { Zap, Shuffle } from 'lucide-react';
 
 const ParallelNode = ({ data, isConnectable }) => {

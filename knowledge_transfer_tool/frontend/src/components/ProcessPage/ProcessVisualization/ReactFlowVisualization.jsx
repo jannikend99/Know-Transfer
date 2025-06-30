@@ -6,10 +6,10 @@ import {
   addEdge,
   Panel,
   MarkerType,
-} from '@reactflow/core';
-import { MiniMap } from '@reactflow/minimap';
-import { Controls } from '@reactflow/controls';
-import { Background } from '@reactflow/background';
+  MiniMap,
+  Controls,
+  Background,
+} from 'reactflow';
 import { RefreshCw, Network, Maximize2 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '../../ui/card';
 import { Button } from '../../ui/button';

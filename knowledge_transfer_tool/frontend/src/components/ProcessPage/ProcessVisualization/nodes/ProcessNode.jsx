@@ -1,5 +1,5 @@
 import React from 'react';
-import { Handle, Position } from '@reactflow/core';
+import { Handle, Position } from 'reactflow';
 import { FileText, ArrowRight, GitMerge } from 'lucide-react';
 
 const ProcessNode = ({ data, isConnectable }) => {

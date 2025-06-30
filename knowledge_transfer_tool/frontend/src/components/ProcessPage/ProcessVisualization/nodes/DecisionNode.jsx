@@ -1,5 +1,5 @@
 import React from 'react';
-import { Handle, Position } from '@reactflow/core';
+import { Handle, Position } from 'reactflow';
 import { HelpCircle, GitBranch } from 'lucide-react';
 
 const DecisionNode = ({ data, isConnectable }) => {
